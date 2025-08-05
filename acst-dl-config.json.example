@@ -1,0 +1,10 @@
+{
+  "urls": {
+    "Podcast 1": "url",
+    "Podcast 2": "url"
+  },
+  "output_directory": "~/podcasts",
+  "timeout": 30,
+  "max_mp3_links": 5,
+  "download_mp3_files": true
+}
