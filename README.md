@@ -112,11 +112,11 @@ The script will:
 ```
 output_directory/
 ├── Podcast Name 1/
-│   └── 1_media_43e4489f.mp3 (sequential number + hash-based filename)
-│   └── 2_media_7ac9803d.mp3 (sequential number + hash-based filename)
+│   └── media_43e4489f.mp3 (hash-based filename)
+│   └── media_7ac9803d.mp3 (hash-based filename)
 └── Podcast Name 2/
-    └── 1_media_20830c0e.mp3 (sequential number + hash-based filename)
-    └── 2_media_32758bac.mp3 (sequential number + hash-based filename)
+    └── media_20830c0e.mp3 (hash-based filename)
+    └── media_32758bac.mp3 (hash-based filename)
 ```
 
 **Note**: Temporary content and MP3 links files are automatically cleaned up after successful downloads.
@@ -127,7 +127,7 @@ output_directory/
 
 The script automatically prevents downloading duplicate files and maintains clean directories by:
 - **URL-based hashing**: Each MP3 URL generates a unique MD5 hash
-- **Sequential numbering**: Files are numbered in order: `{number}_{base_name}_{hash}.mp3`
+- **Clean filenames**: Files are named as: `{base_name}_{hash}.mp3`
 - **Instant duplicate detection**: Same URLs always produce the same filename
 - **Memory tracking**: Stores current filenames during download process
 - **Automatic cleanup**: Removes old MP3 files not in current download set
