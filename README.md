@@ -53,7 +53,7 @@ pip install requests beautifulsoup4
 
 ## Configuration
 
-Create or modify the [`acst-dl-config.json`](acst-dl-config.json) file to configure your downloads:
+Create or modify the [`acst-dl-config.json.example`](acst-dl-config.json.example) file to configure your downloads:
 
 ```json
 {
@@ -101,7 +101,7 @@ python acst-dl.py
 ```
 
 The script will:
-1. Read configuration from [`acst-dl-config.json`](acst-dl-config.json)
+1. Read configuration from [`acst-dl-config.json.example`](acst-dl-config.json.example)
 2. Create output directories as needed
 3. Download content from each configured URL (HTML pages, RSS feeds, etc.)
 4. Extract MP3 links from the downloaded content
@@ -236,7 +236,7 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 
 ### Common Issues
 
-**Config file not found**: Ensure [`acst-dl-config.json`](acst-dl-config.json) exists in the same directory as the script.
+**Config file not found**: Ensure [`acst-dl-config.json.example`](acst-dl-config.json.example) exists in the same directory as the script.
 
 **Permission errors**: Check that the output directory is writable and you have sufficient permissions.
 
