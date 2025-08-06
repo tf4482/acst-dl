@@ -592,7 +592,7 @@ def download_html(
 
 def main():
     """Main function to orchestrate the download process."""
-    print("🚀 A-Cast Downloader Starting...")
+    print("🚀 Podcast Downloader Starting...")
 
     # Load configuration
     config = load_config()
@@ -684,7 +684,7 @@ def main():
 
     # Summary
     print(f"\n{'='*60}")
-    print(f"📊 A-Cast Download Summary:")
+    print(f"📊 Podcast Download Summary:")
     print(f"🌐 Total URLs processed: {total_urls}")
     print(f"✅ Successful downloads: {successful_downloads}")
     print(f"❌ Failed downloads: {total_urls - successful_downloads}")
