@@ -184,9 +184,7 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
         return None
 
 
-def download_mp3_file(
-    mp3_url, output_dir, timeout=30, verify_ssl=True, file_index=None
-):
+def download_mp3_file(mp3_url, output_dir, timeout=30, verify_ssl=True):
     """Download a single MP3 file with hash-based filename duplicate detection."""
     try:
         # Extract base filename from URL
@@ -208,11 +206,8 @@ def download_mp3_file(
         url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
         name_part = base_filename.rsplit(".", 1)[0]
 
-        # Add sequential numbering if provided
-        if file_index is not None:
-            filename = f"{file_index}_{name_part}_{url_hash}.mp3"
-        else:
-            filename = f"{name_part}_{url_hash}.mp3"
+        # Generate filename without sequential numbering
+        filename = f"{name_part}_{url_hash}.mp3"
 
         filepath = os.path.join(output_dir, filename)
 
@@ -424,7 +419,6 @@ def download_mp3_files(mp3_links, output_dir, timeout=30, verify_ssl=True):
             output_dir,
             timeout,
             verify_ssl,
-            file_index=i,
         )
 
         if result["success"]:
