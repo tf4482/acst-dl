@@ -332,6 +332,33 @@ def clear_all_mp3_files(base_output_dir):
         return 0
 
 
+def cleanup_old_mp3_files(output_dir, current_filenames):
+    """Remove MP3 files that are not in the current set of expected filenames."""
+    try:
+        if not os.path.exists(output_dir):
+            return 0
+
+        cleaned_count = 0
+
+        # Get all MP3 files in the directory
+        for file in os.listdir(output_dir):
+            if file.lower().endswith(".mp3"):
+                if file not in current_filenames:
+                    file_path = os.path.join(output_dir, file)
+                    try:
+                        os.remove(file_path)
+                        print(f"    🗑️ Removed old file: {file}")
+                        cleaned_count += 1
+                    except Exception as e:
+                        print(f"    ❌ Failed to remove old file {file}: {e}")
+
+        return cleaned_count
+
+    except Exception as e:
+        print(f"  ❌ Error cleaning up old MP3 files from {output_dir}: {e}")
+        return 0
+
+
 def download_mp3_files(mp3_links, output_dir, timeout=30):
     """Download all MP3 files from the provided links with hash-based filename duplicate detection."""
     if not mp3_links:
@@ -345,6 +372,7 @@ def download_mp3_files(mp3_links, output_dir, timeout=30):
     skipped = 0
     duplicates = 0
     total_size = 0
+    current_filenames = set()  # Track all current hash-based filenames
 
     for i, mp3_url in enumerate(mp3_links, 1):
         print(f"  [{i}/{len(mp3_links)}] {mp3_url}")
@@ -355,6 +383,9 @@ def download_mp3_files(mp3_links, output_dir, timeout=30):
         )
 
         if result["success"]:
+            # Add filename to current set regardless of whether it was downloaded or skipped
+            current_filenames.add(result["filename"])
+
             if result.get("skipped"):
                 skipped += 1
                 if result.get("duplicate"):
@@ -364,6 +395,9 @@ def download_mp3_files(mp3_links, output_dir, timeout=30):
                 total_size += result.get("size", 0)
         else:
             failed += 1
+
+    # Clean up old MP3 files that are not in the current set
+    cleaned_count = cleanup_old_mp3_files(output_dir, current_filenames)
 
     total_size_mb = total_size / (1024 * 1024)
 
@@ -379,6 +413,9 @@ def download_mp3_files(mp3_links, output_dir, timeout=30):
     summary = ", ".join(summary_parts)
     print(f"  📊 MP3 Download Summary: {summary} ({total_size_mb:.1f} MB total)")
 
+    if cleaned_count > 0:
+        print(f"  🧹 Cleaned up {cleaned_count} old MP3 file(s)")
+
     return {
         "total": len(mp3_links),
         "successful": successful,
@@ -386,6 +423,7 @@ def download_mp3_files(mp3_links, output_dir, timeout=30):
         "skipped": skipped,
         "duplicates": duplicates,
         "total_size": total_size,
+        "cleaned": cleaned_count,
     }
 
 
