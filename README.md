@@ -1,11 +1,14 @@
-# A Podcast Downloader (acst-dl)
+# A Podcast MP3 Downloader (acst-dl)
 
-A Python script for downloading content from podcast feeds and extracting MP3 links. Specifically designed for Acast podcast feeds, this tool can download podcast episodes and organize them into structured directories with intelligent duplicate detection.
+A Python script specifically designed for downloading MP3 files from podcast feeds. This tool extracts MP3 links from podcast feeds (HTML pages, RSS feeds, etc.) and downloads the audio files with intelligent duplicate detection and automatic organization.
+
+**Primary Purpose: MP3 Audio File Downloading**
 
 ## Features
 
-- 📥 Download content from multiple URLs (HTML pages, RSS feeds, etc.)
-- 🎵 Extract MP3 links from downloaded content
+- 🎵 **Primary Focus: MP3 file downloading from podcast feeds**
+- 📥 Extract MP3 links from podcast feeds (HTML pages, RSS feeds, etc.)
+- 💾 Download MP3 audio files with progress tracking
 - 📁 Organize downloads into named subdirectories
 - 🔐 **Hash-based duplicate detection** (prevents re-downloading same files)
 - 🧹 **Automatic cleanup of old files** (keeps only the most recent episodes)
@@ -76,7 +79,7 @@ Create or modify the [`acst-dl-config.json`](acst-dl-config.json) file to config
 | `output_directory` | String | `"downloads"` | Directory where files will be saved |
 | `timeout` | Number | `30` | Request timeout in seconds |
 | `max_mp3_links` | Number | `null` | Maximum number of MP3 links to extract per URL |
-| `download_mp3_files` | Boolean | `false` | Whether to download actual MP3 files |
+| `download_mp3_files` | Boolean | `false` | **Set to `true` for MP3 downloading (main purpose)** |
 | `verify_ssl` | Boolean | `true` | Whether to verify SSL certificates (set to `false` for problematic certificates) |
 
 ### Hash-Based Duplicate Detection & Automatic Cleanup
@@ -102,7 +105,7 @@ The script will:
 2. Create output directories as needed
 3. Download content from each configured URL (HTML pages, RSS feeds, etc.)
 4. Extract MP3 links from the downloaded content
-5. Optionally download the MP3 files themselves
+5. **Download the MP3 audio files** (primary function when `download_mp3_files` is `true`)
 
 ### Output Structure
 
@@ -154,7 +157,7 @@ The script uses multiple methods to find MP3 links:
 
 - Comprehensive error handling for network issues
 - Graceful handling of malformed URLs or content
-- **SSL certificate bypass option** for problematic certificates
+- **Enhanced error categorization** (DNS, SSL, timeout, connection issues)
 - Detailed error reporting with emoji indicators
 - Continues processing remaining URLs even if some fail
 
@@ -166,20 +169,7 @@ The script uses multiple methods to find MP3 links:
 
 ## Examples
 
-### Extract Links Only
-
-```json
-{
-  "urls": {
-    "My Podcast": "https://feeds.acast.com/public/shows/my-podcast"
-  },
-  "output_directory": "./podcast_links",
-  "download_mp3_files": false,
-  "max_mp3_links": 10
-}
-```
-
-### Download Latest Episodes with Duplicate Detection
+### Download MP3 Files (Recommended Usage)
 
 ```json
 {
@@ -194,7 +184,20 @@ The script uses multiple methods to find MP3 links:
 }
 ```
 
-**Note**: Hash-based duplicate detection is automatically enabled when `download_mp3_files` is `true`.
+**Note**: This is the primary intended usage - downloading MP3 files with hash-based duplicate detection automatically enabled.
+
+### Extract Links Only (Alternative Usage)
+
+```json
+{
+  "urls": {
+    "My Podcast": "https://feeds.acast.com/public/shows/my-podcast"
+  },
+  "output_directory": "./podcast_links",
+  "download_mp3_files": false,
+  "max_mp3_links": 10
+}
+```
 
 ### Backward Compatibility
 
