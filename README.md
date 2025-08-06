@@ -8,8 +8,9 @@ A Python script for downloading HTML content from podcast feeds and extracting M
 - 🎵 Extract MP3 links from downloaded HTML pages
 - 📁 Organize downloads into named subdirectories
 - 🔐 **Hash-based duplicate detection** (prevents re-downloading same files)
+- 🧹 **Automatic cleanup of old files** (keeps only the most recent episodes)
 - ⚡ Configurable download limits and timeouts
-- 🧹 Automatic cleanup of temporary files
+- 🗑️ Automatic cleanup of temporary files
 - 📊 Detailed download statistics and progress tracking
 - 🎨 Rich emoji-enhanced console output
 - ⏳ Single-line progress indicators
@@ -76,13 +77,15 @@ Create or modify the [`acst-dl-config.json`](acst-dl-config.json) file to config
 | `max_mp3_links` | Number | `null` | Maximum number of MP3 links to extract per URL |
 | `download_mp3_files` | Boolean | `false` | Whether to download actual MP3 files |
 
-### Hash-Based Duplicate Detection
+### Hash-Based Duplicate Detection & Automatic Cleanup
 
-The script now automatically prevents downloading duplicate MP3 files by:
+The script now automatically prevents downloading duplicate MP3 files and keeps folders clean by:
 - 🔐 **Generating unique filenames** using MD5 hash of the URL (e.g., `media_43e4489f.mp3`)
 - 📁 **Checking file existence** before downloading
 - ⚡ **Skipping duplicates** automatically without any configuration needed
-- 🎯 **No database required** - uses simple filename-based detection
+- 🧹 **Automatic old file cleanup** - removes MP3 files not in current download set
+- 🗑️ **Keeps only recent files** - maintains clean directories with latest episodes
+- 🎯 **No database required** - uses simple filename-based detection and memory tracking
 
 ## Usage
 
@@ -115,15 +118,18 @@ output_directory/
 
 ## Features in Detail
 
-### Hash-Based Duplicate Detection 🔐
+### Hash-Based Duplicate Detection & Automatic Cleanup 🔐
 
-The script automatically prevents downloading duplicate files by:
+The script automatically prevents downloading duplicate files and maintains clean directories by:
 - **URL-based hashing**: Each MP3 URL generates a unique MD5 hash
 - **Smart filename generation**: Files are named `{base_name}_{hash}.mp3`
 - **Instant duplicate detection**: Same URLs always produce the same filename
+- **Memory tracking**: Stores current filenames during download process
+- **Automatic cleanup**: Removes old MP3 files not in current download set
+- **Keep only recent**: Maintains clean directories with latest episodes only
 - **No configuration needed**: Works automatically without any setup
 - **Bandwidth savings**: Skips re-downloading identical content
-- **Storage efficiency**: Prevents duplicate files from consuming disk space
+- **Storage efficiency**: Prevents duplicate files and removes outdated ones
 
 ### MP3 Link Extraction 🎵
 
@@ -137,6 +143,8 @@ The script uses multiple methods to find MP3 links:
 
 - **Automatic cleanup**: Always removes temporary HTML and link files when MP3 downloading is enabled
 - **Hash-based duplicate prevention**: Intelligent detection using URL hashes
+- **Old file removal**: Automatically deletes MP3 files not in current download set
+- **Clean directories**: Keeps only the most recent episodes, removes outdated files
 - **Single-line progress tracking**: Clean progress display for large files
 - **Rich console output**: Emoji-enhanced feedback for better user experience
 
@@ -238,9 +246,10 @@ The script provides rich emoji-enhanced output including:
 - 📋 Processing status with progress indicators
 - 🎵 MP3 extraction and download status
 - ⏭ Duplicate detection notifications
+- 🗑️ Old file cleanup notifications
 - ✅ Success confirmations
 - ❌ Error messages with clear indicators
-- 📊 Detailed summary statistics
+- 📊 Detailed summary statistics with cleanup counts
 
 ### Debug Mode
 
