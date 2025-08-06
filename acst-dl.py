@@ -15,6 +15,7 @@ from urllib.parse import urlparse, urljoin
 from pathlib import Path
 import time
 import re
+import hashlib
 from bs4 import BeautifulSoup
 
 
@@ -75,6 +76,98 @@ def generate_filename(url):
     filename = "".join(c for c in filename if c.isalnum() or c in "._-")
 
     return filename
+
+
+def calculate_file_hash(filepath, algorithm="sha256"):
+    """Calculate hash of a file using specified algorithm."""
+    try:
+        hash_func = hashlib.new(algorithm)
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                hash_func.update(chunk)
+        return hash_func.hexdigest()
+    except Exception as e:
+        print(f"Error calculating hash for {filepath}: {e}")
+        return None
+
+
+def calculate_url_content_hash(url, timeout=30, algorithm="sha256"):
+    """Calculate hash of content from URL without downloading to file."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+
+        response = requests.get(url, timeout=timeout, headers=headers, stream=True)
+        response.raise_for_status()
+
+        hash_func = hashlib.new(algorithm)
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                hash_func.update(chunk)
+
+        return hash_func.hexdigest()
+    except Exception as e:
+        print(f"    ⚠ Error calculating hash for URL {url}: {e}")
+        return None
+
+
+def load_hash_database(hash_db_path):
+    """Load hash database from JSON file."""
+    try:
+        if os.path.exists(hash_db_path):
+            with open(hash_db_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        else:
+            return {
+                "hashes": {},
+                "metadata": {
+                    "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "version": "1.0",
+                },
+            }
+    except Exception as e:
+        print(f"Error loading hash database: {e}")
+        return {
+            "hashes": {},
+            "metadata": {
+                "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "version": "1.0",
+            },
+        }
+
+
+def save_hash_database(hash_db, hash_db_path):
+    """Save hash database to JSON file."""
+    try:
+        hash_db["metadata"]["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(hash_db_path, "w", encoding="utf-8") as f:
+            json.dump(hash_db, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"Error saving hash database: {e}")
+        return False
+
+
+def is_duplicate_hash(content_hash, hash_db):
+    """Check if content hash already exists in database."""
+    return content_hash in hash_db.get("hashes", {})
+
+
+def add_to_hash_database(content_hash, url, filename, file_size, hash_db):
+    """Add file information to hash database."""
+    hash_db["hashes"][content_hash] = {
+        "url": url,
+        "filename": filename,
+        "file_size": file_size,
+        "download_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": int(time.time()),
+    }
+
+
+def get_duplicate_info(content_hash, hash_db):
+    """Get information about duplicate file from hash database."""
+    return hash_db.get("hashes", {}).get(content_hash, None)
 
 
 def extract_mp3_links(html_content, base_url, max_links=None):
@@ -179,8 +272,15 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
         return None
 
 
-def download_mp3_file(mp3_url, output_dir, timeout=30):
-    """Download a single MP3 file with timestamp in filename."""
+def download_mp3_file(
+    mp3_url,
+    output_dir,
+    timeout=30,
+    hash_db=None,
+    hash_db_path=None,
+    enable_hash_detection=False,
+):
+    """Download a single MP3 file with hash-based duplicate detection."""
     try:
         # Extract base filename from URL
         parsed_url = urlparse(mp3_url)
@@ -194,22 +294,56 @@ def download_mp3_file(mp3_url, output_dir, timeout=30):
                 base_filename = f"{url_parts[-1]}.mp3"
             else:
                 # Generate filename from URL hash
-                import hashlib
-
                 url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
                 base_filename = f"audio_{url_hash}.mp3"
 
-        # Add timestamp to filename
-        timestamp = int(time.time())
-        name_part = base_filename.rsplit(".", 1)[0]  # Remove .mp3 extension
-        filename = f"{name_part}_{timestamp}.mp3"
+        # Generate filename (use URL hash for unique naming when hash detection is enabled)
+        if enable_hash_detection:
+            # Use URL hash to create unique filenames for hash-based detection
+            url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
+            name_part = base_filename.rsplit(".", 1)[0]
+            filename = f"{name_part}_{url_hash}.mp3"
+        else:
+            # Add timestamp to filename (original behavior)
+            timestamp = int(time.time())
+            name_part = base_filename.rsplit(".", 1)[0]
+            filename = f"{name_part}_{timestamp}.mp3"
 
         filepath = os.path.join(output_dir, filename)
 
-        # Skip if file already exists
+        # Hash-based duplicate detection
+        if enable_hash_detection and hash_db is not None:
+            print(f"    🔍 Checking for duplicates: {filename}...")
+
+            # Calculate content hash without downloading full file
+            content_hash = calculate_url_content_hash(mp3_url, timeout)
+
+            if content_hash and is_duplicate_hash(content_hash, hash_db):
+                duplicate_info = get_duplicate_info(content_hash, hash_db)
+                print(f"    🔄 Duplicate detected! Previously downloaded as:")
+                print(f"        File: {duplicate_info['filename']}")
+                print(f"        Date: {duplicate_info['download_date']}")
+                print(
+                    f"        Size: {duplicate_info['file_size'] / (1024 * 1024):.1f} MB"
+                )
+                return {
+                    "success": True,
+                    "filename": filename,
+                    "skipped": True,
+                    "duplicate": True,
+                    "hash": content_hash,
+                    "original_file": duplicate_info["filename"],
+                }
+
+        # Skip if file already exists (filename-based check)
         if os.path.exists(filepath):
-            print(f"    ⏭ Skipping {filename} (already exists)")
-            return {"success": True, "filename": filename, "skipped": True}
+            print(f"    ⏭ Skipping {filename} (file already exists)")
+            return {
+                "success": True,
+                "filename": filename,
+                "skipped": True,
+                "duplicate": False,
+            }
 
         # Set headers to mimic a real browser
         headers = {
@@ -223,7 +357,10 @@ def download_mp3_file(mp3_url, output_dir, timeout=30):
         # Download with progress indication for large files
         total_size = int(response.headers.get("content-length", 0))
 
-        with open(filepath, "wb") as f:
+        # Download to temporary file first for hash calculation
+        temp_filepath = filepath + ".tmp"
+
+        with open(temp_filepath, "wb") as f:
             if total_size > 0:
                 downloaded = 0
                 for chunk in response.iter_content(chunk_size=8192):
@@ -239,11 +376,50 @@ def download_mp3_file(mp3_url, output_dir, timeout=30):
                     if chunk:
                         f.write(chunk)
 
-        file_size = os.path.getsize(filepath)
+        file_size = os.path.getsize(temp_filepath)
+
+        # Calculate hash of downloaded file if hash detection is enabled
+        if enable_hash_detection and hash_db is not None:
+            print(f"    🔐 Calculating file hash...")
+            file_hash = calculate_file_hash(temp_filepath)
+
+            if file_hash and is_duplicate_hash(file_hash, hash_db):
+                # Duplicate found after download - remove temp file
+                os.remove(temp_filepath)
+                duplicate_info = get_duplicate_info(file_hash, hash_db)
+                print(f"    🔄 Duplicate detected after download!")
+                print(f"        Original: {duplicate_info['filename']}")
+                print(f"        Date: {duplicate_info['download_date']}")
+                return {
+                    "success": True,
+                    "filename": filename,
+                    "skipped": True,
+                    "duplicate": True,
+                    "hash": file_hash,
+                    "original_file": duplicate_info["filename"],
+                }
+
+            # Not a duplicate - move temp file to final location and add to database
+            os.rename(temp_filepath, filepath)
+
+            if file_hash:
+                add_to_hash_database(file_hash, mp3_url, filename, file_size, hash_db)
+                if hash_db_path:
+                    save_hash_database(hash_db, hash_db_path)
+                print(f"    🔐 Hash recorded: {file_hash[:16]}...")
+        else:
+            # No hash detection - just move temp file to final location
+            os.rename(temp_filepath, filepath)
+
         size_mb = file_size / (1024 * 1024)
         print(f"    ✓ Downloaded {filename} ({size_mb:.1f} MB)")
 
-        return {"success": True, "filename": filename, "size": file_size}
+        return {
+            "success": True,
+            "filename": filename,
+            "size": file_size,
+            "duplicate": False,
+        }
 
     except requests.exceptions.RequestException as e:
         print(f"    ✗ Error downloading {mp3_url}: {e}")
@@ -318,28 +494,53 @@ def clear_all_mp3_files(base_output_dir):
         return 0
 
 
-def download_mp3_files(mp3_links, output_dir, timeout=30):
-    """Download all MP3 files from the provided links after clearing existing ones."""
+def download_mp3_files(
+    mp3_links, output_dir, timeout=30, enable_hash_detection=False, hash_db_path=None
+):
+    """Download all MP3 files from the provided links with optional hash-based duplicate detection."""
     if not mp3_links:
-        return {"total": 0, "successful": 0, "failed": 0, "skipped": 0}
+        return {"total": 0, "successful": 0, "failed": 0, "skipped": 0, "duplicates": 0}
 
-    # Clear existing MP3 files before downloading new ones
-    cleared_count = clear_mp3_files(output_dir)
+    # Initialize hash database if hash detection is enabled
+    hash_db = None
+    if enable_hash_detection and hash_db_path:
+        print(f"  🔐 Loading hash database: {hash_db_path}")
+        hash_db = load_hash_database(hash_db_path)
+        existing_hashes = len(hash_db.get("hashes", {}))
+        if existing_hashes > 0:
+            print(f"  📊 Found {existing_hashes} existing file hash(es) in database")
+
+    # Clear existing MP3 files before downloading new ones (only if hash detection is disabled)
+    cleared_count = 0
+    if not enable_hash_detection:
+        cleared_count = clear_mp3_files(output_dir)
 
     print(f"  📁 Downloading {len(mp3_links)} MP3 file(s) to {output_dir}...")
+    if enable_hash_detection:
+        print(f"  🔍 Hash-based duplicate detection: ENABLED")
 
     successful = 0
     failed = 0
     skipped = 0
+    duplicates = 0
     total_size = 0
 
     for i, mp3_url in enumerate(mp3_links, 1):
         print(f"  [{i}/{len(mp3_links)}] {mp3_url}")
-        result = download_mp3_file(mp3_url, output_dir, timeout)
+        result = download_mp3_file(
+            mp3_url,
+            output_dir,
+            timeout,
+            hash_db=hash_db,
+            hash_db_path=hash_db_path,
+            enable_hash_detection=enable_hash_detection,
+        )
 
         if result["success"]:
             if result.get("skipped"):
                 skipped += 1
+                if result.get("duplicate"):
+                    duplicates += 1
             else:
                 successful += 1
                 total_size += result.get("size", 0)
@@ -347,22 +548,43 @@ def download_mp3_files(mp3_links, output_dir, timeout=30):
             failed += 1
 
     total_size_mb = total_size / (1024 * 1024)
-    print(
-        f"  📊 MP3 Download Summary: {successful} downloaded, {skipped} skipped, {failed} failed ({total_size_mb:.1f} MB total)"
-    )
+
+    # Enhanced summary with duplicate information
+    summary_parts = [
+        f"{successful} downloaded",
+        f"{skipped} skipped",
+        f"{failed} failed",
+    ]
+    if enable_hash_detection and duplicates > 0:
+        summary_parts.insert(1, f"{duplicates} duplicates")
+
+    summary = ", ".join(summary_parts)
+    print(f"  📊 MP3 Download Summary: {summary} ({total_size_mb:.1f} MB total)")
+
+    if enable_hash_detection and hash_db:
+        total_hashes = len(hash_db.get("hashes", {}))
+        print(f"  🔐 Hash database now contains {total_hashes} unique file(s)")
 
     return {
         "total": len(mp3_links),
         "successful": successful,
         "failed": failed,
         "skipped": skipped,
+        "duplicates": duplicates,
         "total_size": total_size,
         "cleared": cleared_count,
     }
 
 
 def download_html(
-    url, output_dir, timeout=30, max_mp3_links=None, url_name=None, download_mp3s=False
+    url,
+    output_dir,
+    timeout=30,
+    max_mp3_links=None,
+    url_name=None,
+    download_mp3s=False,
+    enable_hash_detection=False,
+    hash_db_path=None,
 ):
     """Download HTML content from URL and save to file, then extract MP3 links."""
     try:
@@ -403,7 +625,13 @@ def download_html(
 
             # Download MP3 files if enabled
             if download_mp3s:
-                mp3_download_stats = download_mp3_files(mp3_links, output_dir, timeout)
+                mp3_download_stats = download_mp3_files(
+                    mp3_links,
+                    output_dir,
+                    timeout,
+                    enable_hash_detection=enable_hash_detection,
+                    hash_db_path=hash_db_path,
+                )
 
                 # Clean up HTML and MP3 links files after successful MP3 downloads
                 if mp3_download_stats.get("successful", 0) > 0:
@@ -463,8 +691,21 @@ def main():
     max_mp3_links = config.get("max_mp3_links", None)
     download_mp3s = config.get("download_mp3_files", False)
 
+    # Hash-based duplicate detection configuration
+    hash_detection_config = config.get("hash_duplicate_detection", {})
+    enable_hash_detection = hash_detection_config.get("enabled", False)
+    hash_db_filename = hash_detection_config.get("database_file", "mp3_hashes.json")
+
     # Handle absolute and relative paths for output directory
     output_dir = os.path.abspath(os.path.expanduser(output_dir_config))
+
+    # Set up hash database path
+    hash_db_path = None
+    if enable_hash_detection:
+        if os.path.isabs(hash_db_filename):
+            hash_db_path = hash_db_filename
+        else:
+            hash_db_path = os.path.join(output_dir, hash_db_filename)
 
     # Handle both old list format and new dict format for backward compatibility
     if isinstance(urls_config, list):
@@ -490,6 +731,11 @@ def main():
 
     if download_mp3s:
         print(f"🎵 MP3 file downloading: ENABLED")
+        if enable_hash_detection:
+            print(f"🔐 Hash-based duplicate detection: ENABLED")
+            print(f"📁 Hash database: {hash_db_path}")
+        else:
+            print(f"🔐 Hash-based duplicate detection: DISABLED")
     else:
         print(f"🎵 MP3 file downloading: DISABLED")
 
@@ -508,7 +754,14 @@ def main():
         print(f"  Subfolder: {url_output_dir}")
 
         result = download_html(
-            url, url_output_dir, timeout, max_mp3_links, url_name, download_mp3s
+            url,
+            url_output_dir,
+            timeout,
+            max_mp3_links,
+            url_name,
+            download_mp3s,
+            enable_hash_detection=enable_hash_detection,
+            hash_db_path=hash_db_path,
         )
 
         if isinstance(result, dict) and result.get("success"):

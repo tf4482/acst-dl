@@ -6,5 +6,9 @@
   "output_directory": "~/podcasts",
   "timeout": 30,
   "max_mp3_links": 5,
-  "download_mp3_files": true
+  "download_mp3_files": true,
+  "hash_duplicate_detection": {
+    "enabled": true,
+    "database_file": "mp3_hashes.json"
+  }
 }
