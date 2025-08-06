@@ -61,7 +61,8 @@ Create or modify the [`acst-dl-config.json`](acst-dl-config.json) file to config
   "output_directory": "~/data/podcasts",
   "timeout": 30,
   "max_mp3_links": 5,
-  "download_mp3_files": true
+  "download_mp3_files": true,
+  "verify_ssl": true
 }
 ```
 
@@ -76,6 +77,7 @@ Create or modify the [`acst-dl-config.json`](acst-dl-config.json) file to config
 | `timeout` | Number | `30` | Request timeout in seconds |
 | `max_mp3_links` | Number | `null` | Maximum number of MP3 links to extract per URL |
 | `download_mp3_files` | Boolean | `false` | Whether to download actual MP3 files |
+| `verify_ssl` | Boolean | `true` | Whether to verify SSL certificates (set to `false` for problematic certificates) |
 
 ### Hash-Based Duplicate Detection & Automatic Cleanup
 
@@ -152,6 +154,7 @@ The script uses multiple methods to find MP3 links:
 
 - Comprehensive error handling for network issues
 - Graceful handling of malformed URLs or content
+- **SSL certificate bypass option** for problematic certificates
 - Detailed error reporting with emoji indicators
 - Continues processing remaining URLs even if some fail
 
@@ -186,7 +189,8 @@ The script uses multiple methods to find MP3 links:
   "output_directory": "~/Downloads/podcasts",
   "download_mp3_files": true,
   "max_mp3_links": 3,
-  "timeout": 60
+  "timeout": 60,
+  "verify_ssl": true
 }
 ```
 
@@ -236,6 +240,8 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 **Network timeouts**: Increase the `timeout` value in the configuration for slow connections.
 
 **No MP3 links found**: Some podcast feeds may use different formats or require authentication.
+
+**SSL certificate errors**: Set `"verify_ssl": false` in the configuration to bypass SSL certificate verification for problematic servers.
 
 **Duplicate detection**: Files with the same URL will always generate the same hash-based filename, preventing re-downloads.
 
