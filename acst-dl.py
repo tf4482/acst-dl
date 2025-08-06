@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-A-Cast Downloader Script
+Podcast Downloader Script
 
-This script reads URLs from a config file and downloads HTML content from each URL.
+This script reads URLs from a config file and downloads content from each URL.
 The downloaded content is saved to files in a specified output directory.
-Additionally, it extracts all .mp3 links from the downloaded HTML files.
+Additionally, it extracts all .mp3 links from the downloaded content (HTML pages, RSS feeds, etc.).
 """
 
 import json
@@ -79,7 +79,7 @@ def generate_filename(url):
 
 
 def extract_mp3_links(html_content, base_url, max_links=None):
-    """Extract .mp3 links from HTML content in order of appearance, with optional limit."""
+    """Extract .mp3 links from content (HTML, RSS, etc.) in order of appearance, with optional limit."""
     mp3_links_with_positions = []
     seen = set()
 
@@ -442,7 +442,7 @@ def download_html(
     url_name=None,
     download_mp3s=False,
 ):
-    """Download HTML content from URL and save to file, then extract MP3 links."""
+    """Download content from URL and save to file, then extract MP3 links."""
     try:
         print(f"🌐 Downloading: {url}")
 
@@ -464,7 +464,7 @@ def download_html(
 
         print(f"✅ Successfully downloaded: {url} -> {filename}")
 
-        # Extract MP3 links from the downloaded HTML
+        # Extract MP3 links from the downloaded content
         limit_text = f" (limit: {max_mp3_links})" if max_mp3_links else ""
         print(f"  🔍 Extracting MP3 links from {filename}{limit_text}...")
         mp3_links = extract_mp3_links(response.text, url, max_mp3_links)
@@ -487,11 +487,11 @@ def download_html(
                     timeout,
                 )
 
-            # Always clean up HTML and MP3 links files when MP3 downloading is enabled
+            # Always clean up content and MP3 links files when MP3 downloading is enabled
             if download_mp3s:
                 cleanup_files = []
 
-                # Add HTML file to cleanup list
+                # Add content file to cleanup list
                 html_filepath = os.path.join(output_dir, filename)
                 if os.path.exists(html_filepath):
                     cleanup_files.append((html_filepath, filename))
