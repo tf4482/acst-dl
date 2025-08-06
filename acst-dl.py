@@ -36,18 +36,18 @@ def load_config(config_file="acst-dl-config.json"):
         try:
             with open(config_path, "r") as f:
                 config = json.load(f)
-            print(f"Using config file: {config_path}")
+            print(f"📄 Using config file: {config_path}")
             return config
         except FileNotFoundError:
             continue
         except json.JSONDecodeError as e:
-            print(f"Error: Invalid JSON in config file '{config_path}': {e}")
+            print(f"❌ Error: Invalid JSON in config file '{config_path}': {e}")
             sys.exit(1)
 
     # If we get here, no config file was found
-    print(f"Error: Config file '{config_file}' not found in:")
+    print(f"❌ Error: Config file '{config_file}' not found in:")
     for path in config_paths:
-        print(f"  - {path}")
+        print(f"  📁 {path}")
     sys.exit(1)
 
 
@@ -140,7 +140,7 @@ def extract_mp3_links(html_content, base_url, max_links=None):
         return ordered_mp3_links
 
     except Exception as e:
-        print(f"Error extracting MP3 links: {e}")
+        print(f"❌ Error extracting MP3 links: {e}")
         return []
 
 
@@ -176,7 +176,7 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
         return links_filename
 
     except Exception as e:
-        print(f"Error saving MP3 links: {e}")
+        print(f"❌ Error saving MP3 links: {e}")
         return None
 
 
@@ -250,7 +250,7 @@ def download_mp3_file(mp3_url, output_dir, timeout=30):
 
         file_size = os.path.getsize(filepath)
         size_mb = file_size / (1024 * 1024)
-        print(f"    ✓ Downloaded {filename} ({size_mb:.1f} MB)")
+        print(f"    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
 
         return {
             "success": True,
@@ -260,10 +260,10 @@ def download_mp3_file(mp3_url, output_dir, timeout=30):
         }
 
     except requests.exceptions.RequestException as e:
-        print(f"    ✗ Error downloading {mp3_url}: {e}")
+        print(f"    ❌ Error downloading {mp3_url}: {e}")
         return {"success": False, "error": str(e)}
     except Exception as e:
-        print(f"    ✗ Unexpected error downloading {mp3_url}: {e}")
+        print(f"    ❌ Unexpected error downloading {mp3_url}: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -285,14 +285,14 @@ def clear_mp3_files(output_dir):
             for mp3_file in mp3_files:
                 try:
                     os.remove(mp3_file)
-                    print(f"    ✓ Removed {os.path.basename(mp3_file)}")
+                    print(f"    🗑️ Removed {os.path.basename(mp3_file)}")
                 except Exception as e:
-                    print(f"    ✗ Failed to remove {os.path.basename(mp3_file)}: {e}")
+                    print(f"    ❌ Failed to remove {os.path.basename(mp3_file)}: {e}")
 
         return len(mp3_files)
 
     except Exception as e:
-        print(f"  ✗ Error clearing MP3 files from {output_dir}: {e}")
+        print(f"  ❌ Error clearing MP3 files from {output_dir}: {e}")
         return 0
 
 
@@ -319,16 +319,16 @@ def clear_all_mp3_files(base_output_dir):
                 try:
                     relative_path = os.path.relpath(mp3_file, base_output_dir)
                     os.remove(mp3_file)
-                    print(f"  ✓ Removed {relative_path}")
+                    print(f"  🗑️ Removed {relative_path}")
                     total_cleared += 1
                 except Exception as e:
                     relative_path = os.path.relpath(mp3_file, base_output_dir)
-                    print(f"  ✗ Failed to remove {relative_path}: {e}")
+                    print(f"  ❌ Failed to remove {relative_path}: {e}")
 
         return total_cleared
 
     except Exception as e:
-        print(f"✗ Error clearing MP3 files from {base_output_dir}: {e}")
+        print(f"❌ Error clearing MP3 files from {base_output_dir}: {e}")
         return 0
 
 
@@ -399,7 +399,7 @@ def download_html(
 ):
     """Download HTML content from URL and save to file, then extract MP3 links."""
     try:
-        print(f"Downloading: {url}")
+        print(f"🌐 Downloading: {url}")
 
         # Set headers to mimic a real browser
         headers = {
@@ -417,11 +417,11 @@ def download_html(
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(response.text)
 
-        print(f"✓ Successfully downloaded: {url} -> {filename}")
+        print(f"✅ Successfully downloaded: {url} -> {filename}")
 
         # Extract MP3 links from the downloaded HTML
         limit_text = f" (limit: {max_mp3_links})" if max_mp3_links else ""
-        print(f"  Extracting MP3 links from {filename}{limit_text}...")
+        print(f"  🔍 Extracting MP3 links from {filename}{limit_text}...")
         mp3_links = extract_mp3_links(response.text, url, max_mp3_links)
 
         mp3_download_stats = {"total": 0, "successful": 0, "failed": 0, "skipped": 0}
@@ -430,9 +430,9 @@ def download_html(
             # Save MP3 links to a separate file
             links_filename = save_mp3_links(mp3_links, output_dir, url, url_name)
             if links_filename:
-                print(f"  ✓ Found {len(mp3_links)} MP3 link(s) -> {links_filename}")
+                print(f"  🎵 Found {len(mp3_links)} MP3 link(s) -> {links_filename}")
             else:
-                print(f"  ✗ Error saving MP3 links")
+                print(f"  ❌ Error saving MP3 links")
 
             # Download MP3 files if enabled
             if download_mp3s:
@@ -463,11 +463,11 @@ def download_html(
                     for file_path, file_name in cleanup_files:
                         try:
                             os.remove(file_path)
-                            print(f"    ✓ Removed {file_name}")
+                            print(f"    🗑️ Removed {file_name}")
                         except Exception as e:
-                            print(f"    ✗ Failed to remove {file_name}: {e}")
+                            print(f"    ❌ Failed to remove {file_name}: {e}")
         else:
-            print(f"  ℹ No MP3 links found in {filename}")
+            print(f"  ℹ️ No MP3 links found in {filename}")
 
         return {
             "success": True,
@@ -477,16 +477,16 @@ def download_html(
         }
 
     except requests.exceptions.RequestException as e:
-        print(f"✗ Error downloading {url}: {e}")
+        print(f"❌ Error downloading {url}: {e}")
         return {"success": False, "error": str(e)}
     except Exception as e:
-        print(f"✗ Unexpected error downloading {url}: {e}")
+        print(f"❌ Unexpected error downloading {url}: {e}")
         return {"success": False, "error": str(e)}
 
 
 def main():
     """Main function to orchestrate the download process."""
-    print("A-Cast Downloader Starting...")
+    print("🚀 A-Cast Downloader Starting...")
 
     # Load configuration
     config = load_config()
@@ -512,19 +512,19 @@ def main():
         # New format: dict with names and URLs
         urls_dict = urls_config
     else:
-        print("Error: Invalid URLs configuration format.")
+        print("❌ Error: Invalid URLs configuration format.")
         sys.exit(1)
 
     if not urls_dict:
-        print("Error: No URLs found in config file.")
+        print("❌ Error: No URLs found in config file.")
         sys.exit(1)
 
     # Create main output directory
     create_output_directory(output_dir)
-    print(f"Output directory: {output_dir}")
+    print(f"📁 Output directory: {output_dir}")
 
     if max_mp3_links:
-        print(f"MP3 links limit: {max_mp3_links}")
+        print(f"🔢 MP3 links limit: {max_mp3_links}")
 
     if download_mp3s:
         print(f"🎵 MP3 file downloading: ENABLED")
@@ -539,12 +539,12 @@ def main():
     total_urls = len(urls_dict)
 
     for i, (url_name, url) in enumerate(urls_dict.items(), 1):
-        print(f"\n[{i}/{total_urls}] Processing '{url_name}': {url}")
+        print(f"\n📋 [{i}/{total_urls}] Processing '{url_name}': {url}")
 
         # Create subfolder for this URL
         url_output_dir = os.path.join(output_dir, url_name)
         create_output_directory(url_output_dir)
-        print(f"  Subfolder: {url_output_dir}")
+        print(f"  📂 Subfolder: {url_output_dir}")
 
         result = download_html(
             url,
@@ -566,16 +566,16 @@ def main():
 
     # Summary
     print(f"\n{'='*60}")
-    print(f"A-Cast Download Summary:")
-    print(f"Total URLs processed: {total_urls}")
-    print(f"Successful downloads: {successful_downloads}")
-    print(f"Failed downloads: {total_urls - successful_downloads}")
-    print(f"Total MP3 links found: {total_mp3_links}")
+    print(f"📊 A-Cast Download Summary:")
+    print(f"🌐 Total URLs processed: {total_urls}")
+    print(f"✅ Successful downloads: {successful_downloads}")
+    print(f"❌ Failed downloads: {total_urls - successful_downloads}")
+    print(f"🎵 Total MP3 links found: {total_mp3_links}")
     if download_mp3s:
-        print(f"Total MP3 files downloaded: {total_mp3_downloads}")
+        print(f"💾 Total MP3 files downloaded: {total_mp3_downloads}")
     if max_mp3_links:
-        print(f"MP3 links limit per URL: {max_mp3_links}")
-    print(f"Output directory: {output_dir}")
+        print(f"🔢 MP3 links limit per URL: {max_mp3_links}")
+    print(f"📁 Output directory: {output_dir}")
     print(f"{'='*60}")
 
 
