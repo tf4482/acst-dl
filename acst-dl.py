@@ -230,19 +230,26 @@ def download_mp3_file(mp3_url, output_dir, timeout=30):
         with open(filepath, "wb") as f:
             if total_size > 0:
                 downloaded = 0
+                show_progress = (
+                    total_size > 1024 * 1024
+                )  # Show progress for files > 1MB
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
                         # Simple progress indication for large files (>1MB)
-                        if total_size > 1024 * 1024 and downloaded % (1024 * 1024) == 0:
+                        if show_progress and downloaded % (1024 * 1024) == 0:
                             progress = (downloaded / total_size) * 100
                             print(
-                                f"\r      Progress: {progress:.1f}%", end="", flush=True
+                                f"\r      ⏳ Progress: {progress:.1f}%",
+                                end="",
+                                flush=True,
                             )
-                # Print newline after progress is complete
-                if total_size > 1024 * 1024:
-                    print()
+
+                # Show 100% completion for large files
+                if show_progress:
+                    print(f"\r      ⏳ Progress: 100.0%", end="", flush=True)
+                    print()  # Print newline after progress is complete
             else:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
@@ -501,7 +508,6 @@ def download_html(
                     for file_path, file_name in cleanup_files:
                         try:
                             os.remove(file_path)
-                            print(f"    🗑️ Removed {file_name}")
                         except Exception as e:
                             print(f"    ❌ Failed to remove {file_name}: {e}")
         else:
