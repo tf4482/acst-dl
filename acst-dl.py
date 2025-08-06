@@ -237,7 +237,12 @@ def download_mp3_file(mp3_url, output_dir, timeout=30):
                         # Simple progress indication for large files (>1MB)
                         if total_size > 1024 * 1024 and downloaded % (1024 * 1024) == 0:
                             progress = (downloaded / total_size) * 100
-                            print(f"      Progress: {progress:.1f}%")
+                            print(
+                                f"\r      Progress: {progress:.1f}%", end="", flush=True
+                            )
+                # Print newline after progress is complete
+                if total_size > 1024 * 1024:
+                    print()
             else:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
