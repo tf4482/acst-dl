@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "acst-dl"
 version = "0.1.0"
-description = "Acast Downloader Script"
+description = "A Podcast MP3 Downloader"
 authors = ["User"]
 readme = "README.md"
 
