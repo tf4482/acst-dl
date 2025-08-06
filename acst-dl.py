@@ -180,12 +180,7 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
         return None
 
 
-def download_mp3_file(
-    mp3_url,
-    output_dir,
-    timeout=30,
-    enable_hash_detection=False,
-):
+def download_mp3_file(mp3_url, output_dir, timeout=30):
     """Download a single MP3 file with hash-based filename duplicate detection."""
     try:
         # Extract base filename from URL
@@ -203,17 +198,10 @@ def download_mp3_file(
                 url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
                 base_filename = f"audio_{url_hash}.mp3"
 
-        # Generate filename (use URL hash for unique naming when hash detection is enabled)
-        if enable_hash_detection:
-            # Use URL hash to create unique filenames for hash-based detection
-            url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
-            name_part = base_filename.rsplit(".", 1)[0]
-            filename = f"{name_part}_{url_hash}.mp3"
-        else:
-            # Add timestamp to filename (original behavior)
-            timestamp = int(time.time())
-            name_part = base_filename.rsplit(".", 1)[0]
-            filename = f"{name_part}_{timestamp}.mp3"
+        # Generate filename using URL hash for unique naming and duplicate detection
+        url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
+        name_part = base_filename.rsplit(".", 1)[0]
+        filename = f"{name_part}_{url_hash}.mp3"
 
         filepath = os.path.join(output_dir, filename)
 
@@ -224,7 +212,7 @@ def download_mp3_file(
                 "success": True,
                 "filename": filename,
                 "skipped": True,
-                "duplicate": enable_hash_detection,
+                "duplicate": True,
             }
 
         # Set headers to mimic a real browser
@@ -339,19 +327,13 @@ def clear_all_mp3_files(base_output_dir):
         return 0
 
 
-def download_mp3_files(mp3_links, output_dir, timeout=30, enable_hash_detection=False):
-    """Download all MP3 files from the provided links with optional hash-based filename duplicate detection."""
+def download_mp3_files(mp3_links, output_dir, timeout=30):
+    """Download all MP3 files from the provided links with hash-based filename duplicate detection."""
     if not mp3_links:
         return {"total": 0, "successful": 0, "failed": 0, "skipped": 0, "duplicates": 0}
 
-    # Clear existing MP3 files before downloading new ones (only if hash detection is disabled)
-    cleared_count = 0
-    if not enable_hash_detection:
-        cleared_count = clear_mp3_files(output_dir)
-
     print(f"  📁 Downloading {len(mp3_links)} MP3 file(s) to {output_dir}...")
-    if enable_hash_detection:
-        print(f"  🔍 Hash-based filename duplicate detection: ENABLED")
+    print(f"  🔍 Hash-based filename duplicate detection: ENABLED")
 
     successful = 0
     failed = 0
@@ -365,7 +347,6 @@ def download_mp3_files(mp3_links, output_dir, timeout=30, enable_hash_detection=
             mp3_url,
             output_dir,
             timeout,
-            enable_hash_detection=enable_hash_detection,
         )
 
         if result["success"]:
@@ -387,7 +368,7 @@ def download_mp3_files(mp3_links, output_dir, timeout=30, enable_hash_detection=
         f"{skipped} skipped",
         f"{failed} failed",
     ]
-    if enable_hash_detection and duplicates > 0:
+    if duplicates > 0:
         summary_parts.insert(1, f"{duplicates} duplicates")
 
     summary = ", ".join(summary_parts)
@@ -400,7 +381,6 @@ def download_mp3_files(mp3_links, output_dir, timeout=30, enable_hash_detection=
         "skipped": skipped,
         "duplicates": duplicates,
         "total_size": total_size,
-        "cleared": cleared_count,
     }
 
 
@@ -411,7 +391,6 @@ def download_html(
     max_mp3_links=None,
     url_name=None,
     download_mp3s=False,
-    enable_hash_detection=False,
 ):
     """Download HTML content from URL and save to file, then extract MP3 links."""
     try:
@@ -456,7 +435,6 @@ def download_html(
                     mp3_links,
                     output_dir,
                     timeout,
-                    enable_hash_detection=enable_hash_detection,
                 )
 
             # Always clean up HTML and MP3 links files when MP3 downloading is enabled
@@ -515,9 +493,8 @@ def main():
     max_mp3_links = config.get("max_mp3_links", None)
     download_mp3s = config.get("download_mp3_files", False)
 
-    # Hash-based duplicate detection configuration
-    hash_detection_config = config.get("hash_duplicate_detection", {})
-    enable_hash_detection = hash_detection_config.get("enabled", False)
+    # Hash-based duplicate detection is always enabled
+    enable_hash_detection = True
 
     # Handle absolute and relative paths for output directory
     output_dir = os.path.abspath(os.path.expanduser(output_dir_config))
@@ -546,10 +523,7 @@ def main():
 
     if download_mp3s:
         print(f"🎵 MP3 file downloading: ENABLED")
-        if enable_hash_detection:
-            print(f"🔐 Hash-based filename duplicate detection: ENABLED")
-        else:
-            print(f"🔐 Hash-based duplicate detection: DISABLED")
+        print(f"🔐 Hash-based filename duplicate detection: ENABLED")
     else:
         print(f"🎵 MP3 file downloading: DISABLED")
 
@@ -574,7 +548,6 @@ def main():
             max_mp3_links,
             url_name,
             download_mp3s,
-            enable_hash_detection=enable_hash_detection,
         )
 
         if isinstance(result, dict) and result.get("success"):
