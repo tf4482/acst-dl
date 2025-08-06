@@ -1,11 +1,11 @@
-# Acast Downloader (acst-dl)
+# A Podcast Downloader (acst-dl)
 
-A Python script for downloading HTML content from podcast feeds and extracting MP3 links. Specifically designed for Acast podcast feeds, this tool can download podcast episodes and organize them into structured directories with intelligent duplicate detection.
+A Python script for downloading content from podcast feeds and extracting MP3 links. Specifically designed for Acast podcast feeds, this tool can download podcast episodes and organize them into structured directories with intelligent duplicate detection.
 
 ## Features
 
-- 📥 Download HTML content from multiple URLs
-- 🎵 Extract MP3 links from downloaded HTML pages
+- 📥 Download content from multiple URLs (HTML pages, RSS feeds, etc.)
+- 🎵 Extract MP3 links from downloaded content
 - 📁 Organize downloads into named subdirectories
 - 🔐 **Hash-based duplicate detection** (prevents re-downloading same files)
 - 🧹 **Automatic cleanup of old files** (keeps only the most recent episodes)
@@ -98,7 +98,7 @@ python acst-dl.py
 The script will:
 1. Read configuration from [`acst-dl-config.json`](acst-dl-config.json)
 2. Create output directories as needed
-3. Download HTML content from each configured URL
+3. Download content from each configured URL (HTML pages, RSS feeds, etc.)
 4. Extract MP3 links from the downloaded content
 5. Optionally download the MP3 files themselves
 
@@ -114,7 +114,7 @@ output_directory/
     └── media_32758bac.mp3 (hash-based filename)
 ```
 
-**Note**: Temporary HTML and MP3 links files are automatically cleaned up after successful downloads.
+**Note**: Temporary content and MP3 links files are automatically cleaned up after successful downloads.
 
 ## Features in Detail
 
@@ -134,14 +134,14 @@ The script automatically prevents downloading duplicate files and maintains clea
 ### MP3 Link Extraction 🎵
 
 The script uses multiple methods to find MP3 links:
-- Parses HTML elements (`<a>`, `<audio>`, `<source>` tags)
+- Parses content elements (`<a>`, `<audio>`, `<source>` tags for HTML)
 - Uses regex patterns to find direct MP3 URLs
-- Maintains order of appearance in the original HTML
+- Maintains order of appearance in the original content
 - Supports configurable limits on number of links extracted
 
 ### File Management 📁
 
-- **Automatic cleanup**: Always removes temporary HTML and link files when MP3 downloading is enabled
+- **Automatic cleanup**: Always removes temporary content and link files when MP3 downloading is enabled
 - **Hash-based duplicate prevention**: Intelligent detection using URL hashes
 - **Old file removal**: Automatically deletes MP3 files not in current download set
 - **Clean directories**: Keeps only the most recent episodes, removes outdated files
@@ -151,7 +151,7 @@ The script uses multiple methods to find MP3 links:
 ### Error Handling ❌
 
 - Comprehensive error handling for network issues
-- Graceful handling of malformed URLs or HTML
+- Graceful handling of malformed URLs or content
 - Detailed error reporting with emoji indicators
 - Continues processing remaining URLs even if some fail
 
