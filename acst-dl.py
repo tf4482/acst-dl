@@ -18,6 +18,7 @@ import re
 import hashlib
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 import warnings
+import urllib3
 
 
 def load_config(config_file="acst-dl-config.json"):
@@ -183,7 +184,7 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
         return None
 
 
-def download_mp3_file(mp3_url, output_dir, timeout=30):
+def download_mp3_file(mp3_url, output_dir, timeout=30, verify_ssl=True):
     """Download a single MP3 file with hash-based filename duplicate detection."""
     try:
         # Extract base filename from URL
@@ -224,7 +225,14 @@ def download_mp3_file(mp3_url, output_dir, timeout=30):
         }
 
         print(f"    📥 Downloading {filename}...")
-        response = requests.get(mp3_url, timeout=timeout, headers=headers, stream=True)
+
+        # Disable SSL warnings if SSL verification is disabled
+        if not verify_ssl:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        response = requests.get(
+            mp3_url, timeout=timeout, headers=headers, stream=True, verify=verify_ssl
+        )
         response.raise_for_status()
 
         # Download with progress indication for large files
@@ -270,7 +278,25 @@ def download_mp3_file(mp3_url, output_dir, timeout=30):
         }
 
     except requests.exceptions.RequestException as e:
-        print(f"    ❌ Error downloading {mp3_url}: {e}")
+        error_msg = str(e)
+        # Categorize common network errors
+        if (
+            "Name or service not known" in error_msg
+            or "NameResolutionError" in error_msg
+        ):
+            print(f"    🌐 DNS resolution failed for {mp3_url}: Domain not found")
+        elif "certificate verify failed" in error_msg or "SSLError" in error_msg:
+            print(
+                f"    🔒 SSL certificate error for {mp3_url}: Try setting 'verify_ssl': false"
+            )
+        elif "Connection refused" in error_msg:
+            print(f"    🚫 Connection refused for {mp3_url}: Server may be down")
+        elif "timeout" in error_msg.lower():
+            print(
+                f"    ⏱️ Timeout downloading {mp3_url}: Server too slow or unresponsive"
+            )
+        else:
+            print(f"    ❌ Error downloading {mp3_url}: {e}")
         return {"success": False, "error": str(e)}
     except Exception as e:
         print(f"    ❌ Unexpected error downloading {mp3_url}: {e}")
@@ -369,7 +395,7 @@ def cleanup_old_mp3_files(output_dir, current_filenames):
         return 0
 
 
-def download_mp3_files(mp3_links, output_dir, timeout=30):
+def download_mp3_files(mp3_links, output_dir, timeout=30, verify_ssl=True):
     """Download all MP3 files from the provided links with hash-based filename duplicate detection."""
     if not mp3_links:
         return {"total": 0, "successful": 0, "failed": 0, "skipped": 0, "duplicates": 0}
@@ -390,6 +416,7 @@ def download_mp3_files(mp3_links, output_dir, timeout=30):
             mp3_url,
             output_dir,
             timeout,
+            verify_ssl,
         )
 
         if result["success"]:
@@ -444,6 +471,7 @@ def download_html(
     max_mp3_links=None,
     url_name=None,
     download_mp3s=False,
+    verify_ssl=True,
 ):
     """Download content from URL and save to file, then extract MP3 links."""
     try:
@@ -454,7 +482,13 @@ def download_html(
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
-        response = requests.get(url, timeout=timeout, headers=headers)
+        # Disable SSL warnings if SSL verification is disabled
+        if not verify_ssl:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        response = requests.get(
+            url, timeout=timeout, headers=headers, verify=verify_ssl
+        )
         response.raise_for_status()  # Raise an exception for bad status codes
 
         # Generate filename
@@ -488,6 +522,7 @@ def download_html(
                     mp3_links,
                     output_dir,
                     timeout,
+                    verify_ssl,
                 )
 
             # Always clean up content and MP3 links files when MP3 downloading is enabled
@@ -524,7 +559,23 @@ def download_html(
         }
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Error downloading {url}: {e}")
+        error_msg = str(e)
+        # Categorize common network errors
+        if (
+            "Name or service not known" in error_msg
+            or "NameResolutionError" in error_msg
+        ):
+            print(f"🌐 DNS resolution failed for {url}: Domain not found")
+        elif "certificate verify failed" in error_msg or "SSLError" in error_msg:
+            print(
+                f"🔒 SSL certificate error for {url}: Try setting 'verify_ssl': false"
+            )
+        elif "Connection refused" in error_msg:
+            print(f"🚫 Connection refused for {url}: Server may be down")
+        elif "timeout" in error_msg.lower():
+            print(f"⏱️ Timeout downloading {url}: Server too slow or unresponsive")
+        else:
+            print(f"❌ Error downloading {url}: {e}")
         return {"success": False, "error": str(e)}
     except Exception as e:
         print(f"❌ Unexpected error downloading {url}: {e}")
@@ -544,6 +595,7 @@ def main():
     timeout = config.get("timeout", 30)
     max_mp3_links = config.get("max_mp3_links", None)
     download_mp3s = config.get("download_mp3_files", False)
+    verify_ssl = config.get("verify_ssl", True)
 
     # Hash-based duplicate detection is always enabled
     enable_hash_detection = True
@@ -576,6 +628,12 @@ def main():
     if download_mp3s:
         print(f"🎵 MP3 file downloading: ENABLED")
         print(f"🔐 Hash-based filename duplicate detection: ENABLED")
+        ssl_status = (
+            "ENABLED"
+            if verify_ssl
+            else "DISABLED (bypassed for problematic certificates)"
+        )
+        print(f"🔒 SSL certificate verification: {ssl_status}")
     else:
         print(f"🎵 MP3 file downloading: DISABLED")
 
@@ -583,6 +641,8 @@ def main():
     successful_downloads = 0
     total_mp3_links = 0
     total_mp3_downloads = 0
+    total_mp3_failed = 0
+    total_mp3_skipped = 0
     total_urls = len(urls_dict)
 
     for i, (url_name, url) in enumerate(urls_dict.items(), 1):
@@ -600,6 +660,7 @@ def main():
             max_mp3_links,
             url_name,
             download_mp3s,
+            verify_ssl,
         )
 
         if isinstance(result, dict) and result.get("success"):
@@ -608,6 +669,8 @@ def main():
             if download_mp3s:
                 mp3_stats = result.get("mp3_downloads", {})
                 total_mp3_downloads += mp3_stats.get("successful", 0)
+                total_mp3_failed += mp3_stats.get("failed", 0)
+                total_mp3_skipped += mp3_stats.get("skipped", 0)
         elif result is True:  # Backward compatibility
             successful_downloads += 1
 
@@ -620,6 +683,10 @@ def main():
     print(f"🎵 Total MP3 links found: {total_mp3_links}")
     if download_mp3s:
         print(f"💾 Total MP3 files downloaded: {total_mp3_downloads}")
+        if total_mp3_failed > 0:
+            print(f"❌ Total MP3 download failures: {total_mp3_failed}")
+        if total_mp3_skipped > 0:
+            print(f"⏭ Total MP3 files skipped: {total_mp3_skipped}")
     if max_mp3_links:
         print(f"🔢 MP3 links limit per URL: {max_mp3_links}")
     print(f"📁 Output directory: {output_dir}")
