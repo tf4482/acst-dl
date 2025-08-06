@@ -16,7 +16,8 @@ from pathlib import Path
 import time
 import re
 import hashlib
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+import warnings
 
 
 def load_config(config_file="acst-dl-config.json"):
@@ -84,6 +85,8 @@ def extract_mp3_links(html_content, base_url, max_links=None):
     seen = set()
 
     try:
+        # Filter XML parsed as HTML warning for RSS feeds and XML content
+        warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
         soup = BeautifulSoup(html_content, "html.parser")
 
         # Find all elements that could contain MP3 links and track their positions
