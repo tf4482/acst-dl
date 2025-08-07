@@ -249,7 +249,7 @@ async def run_download_session(session_id: str):
         urls_dict = config.get("urls", {})
 
         # Hardcoded output directory
-        output_dir = os.path.abspath(os.path.expanduser("~/podcasts"))
+        output_dir = os.path.abspath(os.path.expanduser("./podcasts"))
         create_output_directory(output_dir)
 
         total_mp3_stats = {"total": 0, "downloaded": 0, "failed": 0, "skipped": 0}
@@ -355,7 +355,7 @@ async def get_session(session_id: str):
 async def clear_files():
     """Clear all downloaded MP3 files"""
     try:
-        output_dir = os.path.abspath(os.path.expanduser("~/podcasts"))
+        output_dir = os.path.abspath(os.path.expanduser("./podcasts"))
         cleared_count = clear_all_mp3_files(output_dir)
         return JSONResponse(
             {
@@ -371,7 +371,7 @@ async def clear_files():
 @app.get("/files", response_class=HTMLResponse)
 async def files_page(request: Request):
     """File management page"""
-    output_dir = os.path.abspath(os.path.expanduser("~/podcasts"))
+    output_dir = os.path.abspath(os.path.expanduser("./podcasts"))
 
     # Get file structure
     files_structure = {}
@@ -410,4 +410,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 if __name__ == "__main__":
-    uvicorn.run("web_app:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
+    uvicorn.run("web_app:app", host="0.0.0.0", port=5000, reload=True, log_level="info")
