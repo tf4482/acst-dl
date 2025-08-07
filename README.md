@@ -285,3 +285,73 @@ For debugging, you can modify the script to add more verbose logging or run with
 - 📁 **Smart filename generation** — uses URL hashes for unique, consistent filenames
 - ⚡ **No configuration needed** — duplicate detection works out of the box
 - 🎯 **Simplified setup** — removed complex database configuration options
+
+## Web Interface
+
+ACST-DL now includes a modern web interface built with FastAPI and Tailwind CSS for easy management of your podcast downloads.
+
+### Features
+
+- 🎨 **Modern UI**: Clean, responsive design with Tailwind CSS
+- 📊 **Real-time Dashboard**: Live progress tracking with WebSocket updates
+- ⚙️ **Configuration Management**: Easy-to-use web forms for managing podcast feeds
+- 📁 **File Management**: Browse and manage downloaded podcast files
+- 🔄 **Live Updates**: Real-time download progress and status updates
+- 📱 **Mobile Responsive**: Works seamlessly on desktop, tablet, and mobile devices
+
+### Running the Web Interface
+
+1. **Install web dependencies:**
+   ```bash
+   poetry install
+   ```
+
+2. **Start the web server:**
+   ```bash
+   poetry run python web_app.py
+   ```
+
+3. **Access the web interface:**
+   Open your browser and navigate to: **http://localhost:5000**
+
+### Web Interface Pages
+
+- **Dashboard (`/`)**: Overview of downloads, statistics, and session management
+- **Configuration (`/config`)**: Manage podcast feeds and download settings
+- **Files (`/files`)**: Browse and manage downloaded MP3 files
+
+### Web-Specific Features
+
+- **Real-time Progress**: Watch downloads progress in real-time via WebSockets
+- **Session Management**: Track multiple download sessions with unique IDs
+- **Interactive Configuration**: Add/remove podcast feeds with live validation
+- **File Browser**: Navigate downloaded files organized by podcast name
+- **One-click Operations**: Start downloads, clear files, and refresh data
+
+### Web Interface Dependencies
+
+The web interface adds the following production-ready dependencies:
+
+- **FastAPI**: Modern, fast web framework for building APIs
+- **Uvicorn**: ASGI server for running FastAPI applications
+- **Jinja2**: Template engine for rendering HTML pages
+- **python-multipart**: For handling form data
+- **websockets**: Real-time communication support
+- **aiofiles**: Asynchronous file operations
+
+### Configuration for Web Interface
+
+The web interface uses the same configuration file format, but with the `output_directory` setting removed (hardcoded to `~/podcasts`):
+
+```json
+{
+  "urls": {
+    "Podcast Name 1": "https://feeds.example.com/podcast1",
+    "Podcast Name 2": "https://feeds.example.com/podcast2"
+  },
+  "timeout": 30,
+  "max_mp3_links": 5,
+  "download_mp3_files": true,
+  "verify_ssl": true
+}
+```
