@@ -36,8 +36,28 @@ A Python script with a modern web interface for downloading MP3 files from podca
 
 - Python 3.8 or higher
 - Poetry (recommended) or pip
+- Docker (optional, for containerized deployment)
 
-### Using Poetry (Recommended)
+### Option 1: Docker (Recommended for Production)
+
+The easiest way to run ACST-DL is using Docker:
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd acst-dl
+
+# Using Docker Compose (recommended)
+docker compose up -d
+
+# Or using Docker directly
+docker build -t acst-dl .
+docker run -d -p 5000:5000 -v ./podcasts:/app/podcasts -v ./acst-dl-config.json:/app/acst-dl-config.json acst-dl
+```
+
+The application will be available at `http://localhost:5000`
+
+### Option 2: Using Poetry (Development)
 
 ```bash
 # Clone the repository
@@ -51,7 +71,7 @@ poetry install
 poetry shell
 ```
 
-### Using pip
+### Option 3: Using pip
 
 ```bash
 # Clone the repository
@@ -292,6 +312,93 @@ The script supports the old array format for URLs:
     "https://feeds.acast.com/public/shows/podcast-1",
     "https://feeds.acast.com/public/shows/podcast-2"
   ]
+}
+```
+
+## Docker Deployment
+
+### Docker Compose (Recommended)
+
+The easiest way to deploy ACST-DL is using Docker Compose:
+
+```bash
+# Start the application
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop the application
+docker compose down
+
+# Update the application
+docker compose pull
+docker compose up -d
+```
+
+### Docker Configuration
+
+The Docker setup includes:
+
+- **Automatic dependency management** using Poetry
+- **Non-root user** for security
+- **Health checks** for monitoring
+- **Volume mounts** for persistent data
+- **Port mapping** (5000:5000)
+
+### Environment Variables
+
+You can customize the deployment using environment variables:
+
+```yaml
+# docker-compose.override.yml
+version: '3.8'
+services:
+  acst-dl:
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8080:5000"  # Change port mapping
+```
+
+### Persistent Data
+
+The Docker setup automatically mounts:
+- `./podcasts` - Downloaded MP3 files
+- `./acst-dl-config.json` - Configuration file
+
+### Production Deployment
+
+For production deployment, consider:
+
+1. **Reverse Proxy**: Use nginx or traefik
+2. **SSL/TLS**: Enable HTTPS
+3. **Monitoring**: Add health check endpoints
+4. **Backup**: Regular backup of podcasts and config
+5. **Updates**: Automated container updates
+
+Example nginx configuration:
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    location / {
+        proxy_pass http://localhost:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # WebSocket support
+    location /ws {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
 }
 ```
 
