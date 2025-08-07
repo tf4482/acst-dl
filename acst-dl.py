@@ -209,8 +209,14 @@ def download_mp3_file(mp3_url, output_dir, timeout=30, verify_ssl=True):
         url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
         name_part = base_filename.rsplit(".", 1)[0]
 
-        # Proposed filename (still contains hash for consistency, but duplicate check is independent)
-        filename = f"{name_part}_{url_hash}.mp3"
+        # Add high-resolution timestamp prefix YYYY-MM-DD-HHMMSSSSSS (microseconds)
+        ts = (
+            time.strftime("%Y-%m-%d-%H%M%S")
+            + f"{int((time.time() % 1) * 1_000_000):06d}"
+        )
+
+        # Proposed filename with timestamp prefix and hash suffix
+        filename = f"{ts}_{name_part}_{url_hash}.mp3"
         filepath = os.path.join(output_dir, filename)
 
         # New: Skip if any existing MP3 in this subfolder already contains this hash in its filename
