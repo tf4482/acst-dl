@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - ACST-DL{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <!-- Page Header -->
+    <div class="border-b border-gray-200 pb-5 mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    <i class="fas fa-cog text-primary-500 mr-2"></i>
+                    Configuration
+                </h3>
+                <p class="mt-2 max-w-4xl text-sm text-gray-500">
+                    Manage your podcast feeds and download settings
+                </p>
+            </div>
+            <div class="flex space-x-3">
+                <a href="/" class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Form -->
+    <form id="config-form" class="space-y-8">
+        <!-- Podcast URLs Section -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">
+                        <i class="fas fa-rss text-primary-500 mr-2"></i>
+                        Podcast URLs
+                    </h3>
+                    <button type="button" id="add-url-btn" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <i class="fas fa-plus mr-2"></i>
+                        Add URL
+                    </button>
+                </div>
+                
+                <div id="urls-container" class="space-y-4">
+                    {% for name, url in config.urls.items() %}
+                        <div class="url-entry flex items-center space-x-3 p-4 border border-gray-200 rounded-lg">
+                            <div class="flex-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Name</label>
+                                    <input type="text" class="url-name mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm" value="{{ name }}" placeholder="Podcast Name">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">URL</label>
+                                    <input type="url" class="url-value mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm" value="{{ url }}" placeholder="https://feeds.example.com/podcast">
+                                </div>
+                            </div>
+                            <button type="button" class="remove-url-btn flex-shrink-0 inline-flex items-center p-2 border border-transparent rounded-full text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                {% if not config.urls %}
+                    <div id="no-urls-message" class="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
+                        <i class="fas fa-rss text-gray-400 text-4xl mb-4"></i>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">No podcast URLs configured</h3>
+                        <p class="text-gray-500 mb-4">Add your first podcast feed URL to get started.</p>
+                        <button type="button" id="add-first-url-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <i class="fas fa-plus mr-2"></i>
+                            Add First URL
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Download Settings Section -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    <i class="fas fa-download text-primary-500 mr-2"></i>
+                    Download Settings
+                </h3>
+                
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <!-- Timeout -->
+                    <div>
+                        <label for="timeout" class="block text-sm font-medium text-gray-700">
+                            Request Timeout (seconds)
+                        </label>
+                        <input type="number" id="timeout" name="timeout" min="1" max="300" value="{{ config.timeout }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                        <p class="mt-2 text-sm text-gray-500">How long to wait for server responses</p>
+                    </div>
+
+                    <!-- Max MP3 Links -->
+                    <div>
+                        <label for="max_mp3_links" class="block text-sm font-medium text-gray-700">
+                            Max MP3 Links per Feed
+                        </label>
+                        <input type="number" id="max_mp3_links" name="max_mp3_links" min="1" max="100" value="{{ config.max_mp3_links or '' }}" placeholder="Unlimited" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                        <p class="mt-2 text-sm text-gray-500">Leave empty for unlimited links</p>
+                    </div>
+
+                    <!-- Download MP3 Files -->
+                    <div class="sm:col-span-2">
+                        <div class="flex items-center">
+                            <input id="download_mp3_files" name="download_mp3_files" type="checkbox" {% if config.download_mp3_files %}checked{% endif %} class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                            <label for="download_mp3_files" class="ml-2 block text-sm text-gray-900">
+                                Download MP3 files automatically
+                            </label>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">When enabled, MP3 files will be downloaded automatically</p>
+                    </div>
+
+                    <!-- SSL Verification -->
+                    <div class="sm:col-span-2">
+                        <div class="flex items-center">
+                            <input id="verify_ssl" name="verify_ssl" type="checkbox" {% if config.verify_ssl %}checked{% endif %} class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                            <label for="verify_ssl" class="ml-2 block text-sm text-gray-900">
+                                Verify SSL certificates
+                            </label>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">Disable only if you encounter SSL certificate errors</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scheduler Settings Section -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    <i class="fas fa-clock text-primary-500 mr-2"></i>
+                    Automatic Download Scheduler
+                </h3>
+                
+                <div class="space-y-6">
+                    <!-- Enable Scheduler -->
+                    <div>
+                        <div class="flex items-center">
+                            <input id="scheduler_enabled" name="scheduler_enabled" type="checkbox"
+                                   {% if config.scheduler and config.scheduler.enabled %}checked{% endif %}
+                                   class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                            <label for="scheduler_enabled" class="ml-2 block text-sm text-gray-900">
+                                Enable automatic downloads
+                            </label>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">When enabled, downloads will run automatically at the specified interval</p>
+                    </div>
+
+                    <!-- Scheduler Interval -->
+                    <div id="scheduler-interval-section" class="{% if not config.scheduler or not config.scheduler.enabled %}opacity-50{% endif %}">
+                        <label for="scheduler_interval" class="block text-sm font-medium text-gray-700">
+                            Download Interval (minutes)
+                        </label>
+                        <input type="number" id="scheduler_interval" name="scheduler_interval"
+                               min="1" max="10080"
+                               value="{{ config.scheduler.interval_minutes if config.scheduler else 60 }}"
+                               class="mt-1 block w-full sm:w-48 border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                               {% if not config.scheduler or not config.scheduler.enabled %}disabled{% endif %}>
+                        <p class="mt-2 text-sm text-gray-500">How often to check for new episodes (1 minute to 1 week)</p>
+                    </div>
+
+                    <!-- Scheduler Status -->
+                    <div id="scheduler-status" class="p-4 bg-gray-50 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i id="scheduler-status-icon" class="fas fa-clock text-gray-400"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-gray-900">Scheduler Status</h4>
+                                <p id="scheduler-status-text" class="text-sm text-gray-500">Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="flex justify-end space-x-3">
+            <button type="button" id="reset-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <i class="fas fa-undo mr-2"></i>
+                Reset
+            </button>
+            <button type="submit" id="save-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <i class="fas fa-save mr-2"></i>
+                Save Configuration
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // URL management
+    function addUrlEntry(name = '', url = '') {
+        const container = document.getElementById('urls-container');
+        const noUrlsMessage = document.getElementById('no-urls-message');
+        
+        if (noUrlsMessage) {
+            noUrlsMessage.style.display = 'none';
+        }
+        
+        const urlEntry = document.createElement('div');
+        urlEntry.className = 'url-entry flex items-center space-x-3 p-4 border border-gray-200 rounded-lg';
+        urlEntry.innerHTML = `
+            <div class="flex-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Name</label>
+                    <input type="text" class="url-name mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm" value="${name}" placeholder="Podcast Name">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">URL</label>
+                    <input type="url" class="url-value mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm" value="${url}" placeholder="https://feeds.example.com/podcast">
+                </div>
+            </div>
+            <button type="button" class="remove-url-btn flex-shrink-0 inline-flex items-center p-2 border border-transparent rounded-full text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+        
+        container.appendChild(urlEntry);
+        
+        // Add remove functionality
+        urlEntry.querySelector('.remove-url-btn').addEventListener('click', function() {
+            urlEntry.remove();
+            checkEmptyUrls();
+        });
+        
+        // Focus on the name input
+        urlEntry.querySelector('.url-name').focus();
+    }
+    
+    function checkEmptyUrls() {
+        const container = document.getElementById('urls-container');
+        const noUrlsMessage = document.getElementById('no-urls-message');
+        
+        if (container.children.length === 0 && noUrlsMessage) {
+            noUrlsMessage.style.display = 'block';
+        }
+    }
+    
+    // Event listeners
+    document.getElementById('add-url-btn').addEventListener('click', function() {
+        addUrlEntry();
+    });
+    
+    const addFirstUrlBtn = document.getElementById('add-first-url-btn');
+    if (addFirstUrlBtn) {
+        addFirstUrlBtn.addEventListener('click', function() {
+            addUrlEntry();
+        });
+    }
+    
+    // Add remove functionality to existing entries
+    document.querySelectorAll('.remove-url-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            btn.closest('.url-entry').remove();
+            checkEmptyUrls();
+        });
+    });
+    
+    // Form submission
+    document.getElementById('config-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const saveBtn = document.getElementById('save-btn');
+        const originalText = saveBtn.innerHTML;
+        
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+        
+        try {
+            // Collect URLs
+            const urls = {};
+            document.querySelectorAll('.url-entry').forEach(entry => {
+                const name = entry.querySelector('.url-name').value.trim();
+                const url = entry.querySelector('.url-value').value.trim();
+                if (name && url) {
+                    urls[name] = url;
+                }
+            });
+            
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('urls_json', JSON.stringify(urls));
+            formData.append('timeout', document.getElementById('timeout').value);
+            
+            const maxMp3Links = document.getElementById('max_mp3_links').value;
+            if (maxMp3Links) {
+                formData.append('max_mp3_links', maxMp3Links);
+            }
+            
+            formData.append('download_mp3_files', document.getElementById('download_mp3_files').checked);
+            formData.append('verify_ssl', document.getElementById('verify_ssl').checked);
+            formData.append('scheduler_enabled', document.getElementById('scheduler_enabled').checked);
+            formData.append('scheduler_interval', document.getElementById('scheduler_interval').value);
+            
+            const response = await fetch('/config/save', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast('Configuration saved successfully!', 'success');
+                // Optionally redirect to dashboard after a delay
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1500);
+            } else {
+                showToast('Failed to save configuration', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving configuration:', error);
+            showToast('Error saving configuration', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalText;
+        }
+    });
+    
+    // Reset button
+    document.getElementById('reset-btn').addEventListener('click', function() {
+        if (confirm('Are you sure you want to reset all changes? This will reload the page.')) {
+            location.reload();
+        }
+    });
+    
+    // Form validation
+    function validateForm() {
+        const urlEntries = document.querySelectorAll('.url-entry');
+        let hasValidUrl = false;
+        
+        urlEntries.forEach(entry => {
+            const name = entry.querySelector('.url-name').value.trim();
+            const url = entry.querySelector('.url-value').value.trim();
+            if (name && url) {
+                hasValidUrl = true;
+            }
+        });
+        
+        const saveBtn = document.getElementById('save-btn');
+        if (hasValidUrl) {
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            saveBtn.disabled = true;
+            saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+    
+    // Add validation listeners
+    document.addEventListener('input', function(e) {
+        if (e.target.classList.contains('url-name') || e.target.classList.contains('url-value')) {
+            validateForm();
+        }
+    });
+    
+    // Initial validation
+    validateForm();
+
+    // Scheduler functionality
+    function updateSchedulerStatus(scheduler) {
+        const statusIcon = document.getElementById('scheduler-status-icon');
+        const statusText = document.getElementById('scheduler-status-text');
+        
+        if (scheduler.enabled) {
+            statusIcon.className = 'fas fa-play-circle text-green-500';
+            if (scheduler.next_run) {
+                const nextRun = new Date(scheduler.next_run);
+                statusText.textContent = `Active - Next run: ${nextRun.toLocaleString()}`;
+            } else {
+                statusText.textContent = 'Active - Starting soon...';
+            }
+        } else {
+            statusIcon.className = 'fas fa-pause-circle text-gray-400';
+            statusText.textContent = 'Disabled';
+        }
+    }
+
+    // Handle scheduler enable/disable
+    document.getElementById('scheduler_enabled').addEventListener('change', function() {
+        const intervalSection = document.getElementById('scheduler-interval-section');
+        const intervalInput = document.getElementById('scheduler_interval');
+        
+        if (this.checked) {
+            intervalSection.classList.remove('opacity-50');
+            intervalInput.disabled = false;
+        } else {
+            intervalSection.classList.add('opacity-50');
+            intervalInput.disabled = true;
+        }
+    });
+
+    // Handle WebSocket messages for scheduler updates
+    function handleSchedulerUpdate(scheduler) {
+        updateSchedulerStatus(scheduler);
+    }
+
+    // Initial scheduler status update
+    {% if scheduler %}
+        updateSchedulerStatus({{ scheduler | tojson }});
+    {% endif %}
+</script>
+{% endblock %}
