@@ -10,7 +10,7 @@ import asyncio
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 import uuid
@@ -59,6 +59,13 @@ templates = Jinja2Templates(directory="templates")
 download_sessions: Dict[str, Dict] = {}
 active_websockets: List[WebSocket] = []
 
+# Scheduler state
+scheduler_task: Optional[asyncio.Task] = None
+scheduler_enabled = False
+scheduler_interval_minutes = 60
+last_scheduled_run: Optional[datetime] = None
+next_scheduled_run: Optional[datetime] = None
+
 
 class DownloadManager:
     """Manages download sessions and progress tracking"""
@@ -101,6 +108,102 @@ class DownloadManager:
 
 
 download_manager = DownloadManager()
+
+
+class SchedulerManager:
+    """Manages automatic download scheduling"""
+
+    def __init__(self):
+        self.enabled = False
+        self.interval_minutes = 60
+        self.last_run = None
+        self.next_run = None
+        self.task = None
+
+    def start(self, interval_minutes: int):
+        """Start the scheduler with given interval"""
+        self.stop()  # Stop any existing scheduler
+        self.enabled = True
+        self.interval_minutes = interval_minutes
+        self.next_run = datetime.now() + timedelta(minutes=interval_minutes)
+        self.task = asyncio.create_task(self._scheduler_loop())
+        print(f"📅 Scheduler started with {interval_minutes} minute interval")
+
+    def stop(self):
+        """Stop the scheduler"""
+        if self.task and not self.task.done():
+            self.task.cancel()
+        self.enabled = False
+        self.next_run = None
+        print("📅 Scheduler stopped")
+
+    def get_status(self) -> dict:
+        """Get current scheduler status"""
+        return {
+            "enabled": self.enabled,
+            "interval_minutes": self.interval_minutes,
+            "last_run": self.last_run.isoformat() if self.last_run else None,
+            "next_run": self.next_run.isoformat() if self.next_run else None,
+        }
+
+    async def _scheduler_loop(self):
+        """Main scheduler loop"""
+        try:
+            while self.enabled:
+                # Wait until next scheduled time
+                if self.next_run:
+                    now = datetime.now()
+                    if now >= self.next_run:
+                        # Time to run scheduled download
+                        print(f"📅 Running scheduled download at {now.isoformat()}")
+                        await self._run_scheduled_download()
+
+                        # Schedule next run
+                        self.last_run = now
+                        self.next_run = now + timedelta(minutes=self.interval_minutes)
+
+                        # Broadcast scheduler status update
+                        await broadcast_scheduler_update()
+
+                # Check every minute
+                await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            print("📅 Scheduler task cancelled")
+        except Exception as e:
+            print(f"📅 Scheduler error: {e}")
+            self.enabled = False
+
+    async def _run_scheduled_download(self):
+        """Run a scheduled download"""
+        try:
+            # Load current config
+            config = load_config()
+
+            # Check if there are URLs configured
+            urls_dict = config.get("urls", {})
+            if not urls_dict:
+                print("📅 Scheduled download skipped: No URLs configured")
+                return
+
+            # Create new download session with scheduler flag
+            session_id = download_manager.create_session(config)
+            session = download_manager.get_session(session_id)
+            if session:
+                session["scheduled"] = True  # Mark as scheduled download
+
+            # Start download in background
+            asyncio.create_task(run_download_session(session_id))
+
+            # Broadcast sessions update
+            await broadcast_sessions_update()
+
+            print(f"📅 Scheduled download started: session {session_id}")
+
+        except Exception as e:
+            print(f"📅 Error running scheduled download: {e}")
+
+
+scheduler_manager = SchedulerManager()
 
 
 async def broadcast_update(message: dict):
@@ -173,6 +276,12 @@ async def broadcast_sessions_update():
     await broadcast_update({"type": "sessions_update", "sessions": sessions})
 
 
+async def broadcast_scheduler_update():
+    """Broadcast scheduler status updates to all clients"""
+    status = scheduler_manager.get_status()
+    await broadcast_update({"type": "scheduler_update", "scheduler": status})
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Main dashboard page"""
@@ -189,10 +298,20 @@ async def home(request: Request):
             "max_mp3_links": 5,
             "download_mp3_files": True,
             "verify_ssl": True,
+            "scheduler": {"enabled": False, "interval_minutes": 60},
         }
 
+    # Get scheduler status
+    scheduler_status = scheduler_manager.get_status()
+
     return templates.TemplateResponse(
-        "index.html", {"request": request, "sessions": sessions, "config": config}
+        "index.html",
+        {
+            "request": request,
+            "sessions": sessions,
+            "config": config,
+            "scheduler": scheduler_status,
+        },
     )
 
 
@@ -208,10 +327,15 @@ async def config_page(request: Request):
             "max_mp3_links": 5,
             "download_mp3_files": True,
             "verify_ssl": True,
+            "scheduler": {"enabled": False, "interval_minutes": 60},
         }
 
+    # Get scheduler status
+    scheduler_status = scheduler_manager.get_status()
+
     return templates.TemplateResponse(
-        "config.html", {"request": request, "config": config}
+        "config.html",
+        {"request": request, "config": config, "scheduler": scheduler_status},
     )
 
 
@@ -222,6 +346,8 @@ async def save_config(
     max_mp3_links: Optional[int] = Form(None),
     download_mp3_files: bool = Form(False),
     verify_ssl: bool = Form(True),
+    scheduler_enabled: bool = Form(False),
+    scheduler_interval: int = Form(60),
 ):
     """Save configuration"""
     try:
@@ -234,6 +360,10 @@ async def save_config(
             "max_mp3_links": max_mp3_links,
             "download_mp3_files": download_mp3_files,
             "verify_ssl": verify_ssl,
+            "scheduler": {
+                "enabled": scheduler_enabled,
+                "interval_minutes": scheduler_interval,
+            },
         }
 
         # Save to config file
@@ -241,8 +371,15 @@ async def save_config(
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
 
-        # Broadcast config update to all clients
+        # Update scheduler based on new configuration
+        if scheduler_enabled:
+            scheduler_manager.start(scheduler_interval)
+        else:
+            scheduler_manager.stop()
+
+        # Broadcast config and scheduler updates to all clients
         await broadcast_config_update()
+        await broadcast_scheduler_update()
 
         return JSONResponse(
             {"success": True, "message": "Configuration saved successfully"}
@@ -549,11 +686,50 @@ async def serve_audio_file(folder_name: str, file_name: str):
         raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
 
 
+@app.get("/scheduler/status")
+async def get_scheduler_status():
+    """Get current scheduler status"""
+    status = scheduler_manager.get_status()
+    return JSONResponse({"scheduler": status})
+
+
+@app.post("/scheduler/start")
+async def start_scheduler(interval_minutes: int = Form(60)):
+    """Start the scheduler with specified interval"""
+    try:
+        scheduler_manager.start(interval_minutes)
+        await broadcast_scheduler_update()
+        return JSONResponse(
+            {
+                "success": True,
+                "message": f"Scheduler started with {interval_minutes} minute interval",
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error starting scheduler: {str(e)}"
+        )
+
+
+@app.post("/scheduler/stop")
+async def stop_scheduler():
+    """Stop the scheduler"""
+    try:
+        scheduler_manager.stop()
+        await broadcast_scheduler_update()
+        return JSONResponse({"success": True, "message": "Scheduler stopped"})
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error stopping scheduler: {str(e)}"
+        )
+
+
 @app.get("/api/trigger-updates")
 async def trigger_updates():
     """Trigger all live updates for newly connected clients"""
     await broadcast_file_update()
     await broadcast_config_update()
+    await broadcast_scheduler_update()
     return JSONResponse({"success": True, "message": "Updates triggered"})
 
 
@@ -568,6 +744,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await asyncio.sleep(0.1)  # Small delay to ensure connection is ready
         await broadcast_file_update()
         await broadcast_config_update()
+        await broadcast_scheduler_update()
 
         while True:
             # Keep connection alive and handle incoming messages
@@ -577,6 +754,26 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         if websocket in active_websockets:
             active_websockets.remove(websocket)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize scheduler on startup"""
+    try:
+        config = load_config()
+        scheduler_config = config.get("scheduler", {})
+        if scheduler_config.get("enabled", False):
+            interval = scheduler_config.get("interval_minutes", 60)
+            scheduler_manager.start(interval)
+            print(f"📅 Scheduler auto-started with {interval} minute interval")
+    except Exception as e:
+        print(f"📅 Could not auto-start scheduler: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up scheduler on shutdown"""
+    scheduler_manager.stop()
 
 
 if __name__ == "__main__":
