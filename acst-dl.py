@@ -618,7 +618,7 @@ def main():
     enable_hash_detection = True
 
     # Hardcoded output directory
-    output_dir = os.path.abspath(os.path.expanduser("~/podcasts"))
+    output_dir = os.path.abspath(os.path.expanduser("./podcasts"))
 
     # Handle both old list format and new dict format for backward compatibility
     if isinstance(urls_config, list):
