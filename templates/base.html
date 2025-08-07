@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ACST-DL Web Interface{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-xl font-bold text-gray-900">
+                            <i class="fas fa-podcast text-primary-500 mr-2"></i>
+                            ACST-DL
+                        </h1>
+                    </div>
+                    <div class="hidden md:ml-6 md:flex md:space-x-8">
+                        <a href="/" class="{% if request.url.path == '/' %}border-primary-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            <i class="fas fa-home mr-2"></i>Dashboard
+                        </a>
+                        <a href="/config" class="{% if request.url.path == '/config' %}border-primary-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            <i class="fas fa-cog mr-2"></i>Configuration
+                        </a>
+                        <a href="/files" class="{% if request.url.path == '/files' %}border-primary-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            <i class="fas fa-folder mr-2"></i>Files
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <button id="start-download-btn" class="relative inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            <i class="fas fa-download mr-2"></i>
+                            Start Download
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile menu -->
+        <div class="md:hidden">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="/" class="{% if request.url.path == '/' %}bg-primary-50 border-primary-500 text-primary-700{% else %}border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700{% endif %} block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                    <i class="fas fa-home mr-2"></i>Dashboard
+                </a>
+                <a href="/config" class="{% if request.url.path == '/config' %}bg-primary-50 border-primary-500 text-primary-700{% else %}border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700{% endif %} block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                    <i class="fas fa-cog mr-2"></i>Configuration
+                </a>
+                <a href="/files" class="{% if request.url.path == '/files' %}bg-primary-50 border-primary-500 text-primary-700{% else %}border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700{% endif %} block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                    <i class="fas fa-folder mr-2"></i>Files
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- WebSocket Connection Status -->
+    <div id="connection-status" class="fixed bottom-4 right-4 z-40">
+        <div class="bg-green-500 text-white px-3 py-1 rounded-full text-sm hidden" id="connected-indicator">
+            <i class="fas fa-wifi mr-1"></i>Connected
+        </div>
+        <div class="bg-red-500 text-white px-3 py-1 rounded-full text-sm hidden" id="disconnected-indicator">
+            <i class="fas fa-wifi-slash mr-1"></i>Disconnected
+        </div>
+    </div>
+
+    <!-- Base JavaScript -->
+    <script>
+        // WebSocket connection
+        let ws = null;
+        let reconnectInterval = null;
+        let heartbeatInterval = null;
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+                document.getElementById('connected-indicator').classList.remove('hidden');
+                document.getElementById('disconnected-indicator').classList.add('hidden');
+                if (reconnectInterval) {
+                    clearInterval(reconnectInterval);
+                    reconnectInterval = null;
+                }
+                
+                // Start heartbeat
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                }
+                heartbeatInterval = setInterval(function() {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send('ping');
+                    }
+                }, 30000); // Send heartbeat every 30 seconds
+            };
+            
+            ws.onmessage = function(event) {
+                if (event.data === 'pong') {
+                    // Heartbeat response, ignore
+                    return;
+                }
+                
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (e) {
+                    console.error('Error parsing WebSocket message:', e);
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket disconnected');
+                document.getElementById('connected-indicator').classList.add('hidden');
+                document.getElementById('disconnected-indicator').classList.remove('hidden');
+                
+                // Clear heartbeat
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                    heartbeatInterval = null;
+                }
+                
+                // Attempt to reconnect
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(connectWebSocket, 5000);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function handleWebSocketMessage(data) {
+            console.log('WebSocket message received:', data.type, data);
+            
+            if (data.type === 'session_update') {
+                updateSessionDisplay(data.session);
+            } else if (data.type === 'file_update') {
+                updateFileDisplay(data);
+            } else if (data.type === 'config_update') {
+                updateConfigDisplay(data.config);
+            } else if (data.type === 'sessions_update') {
+                updateSessionsDisplay(data.sessions);
+            }
+        }
+
+        function updateSessionDisplay(session) {
+            console.log('updateSessionDisplay called with session:', session);
+            // This will be implemented in individual pages
+            if (typeof handleSessionUpdate === 'function') {
+                console.log('Calling handleSessionUpdate');
+                handleSessionUpdate(session);
+            } else {
+                console.log('handleSessionUpdate function not found');
+            }
+        }
+
+        function updateFileDisplay(data) {
+            // This will be implemented in individual pages
+            if (typeof handleFileUpdate === 'function') {
+                handleFileUpdate(data);
+            }
+        }
+
+        function updateConfigDisplay(config) {
+            // This will be implemented in individual pages
+            if (typeof handleConfigUpdate === 'function') {
+                handleConfigUpdate(config);
+            }
+        }
+
+        function updateSessionsDisplay(sessions) {
+            // This will be implemented in individual pages
+            if (typeof handleSessionsUpdate === 'function') {
+                handleSessionsUpdate(sessions);
+            }
+        }
+
+        // Toast notifications
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            const bgColor = {
+                'success': 'bg-green-500',
+                'error': 'bg-red-500',
+                'warning': 'bg-yellow-500',
+                'info': 'bg-blue-500'
+            }[type] || 'bg-blue-500';
+            
+            toast.className = `${bgColor} text-white px-4 py-2 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+            toast.innerHTML = `
+                <div class="flex items-center">
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-white hover:text-gray-200">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            document.getElementById('toast-container').appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove('translate-x-full');
+            }, 100);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        // Start download functionality
+        document.getElementById('start-download-btn').addEventListener('click', async function() {
+            const btn = this;
+            const originalText = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Starting...';
+            
+            try {
+                const response = await fetch('/download/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Download started successfully!', 'success');
+                } else {
+                    showToast('Failed to start download', 'error');
+                }
+            } catch (error) {
+                console.error('Error starting download:', error);
+                showToast('Error starting download', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        });
+
+        // Initialize WebSocket connection
+        connectWebSocket();
+    </script>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
