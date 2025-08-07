@@ -609,7 +609,6 @@ def main():
 
     # Extract configuration values
     urls_config = config.get("urls", {})
-    output_dir_config = config.get("output_directory", "downloads")
     timeout = config.get("timeout", 30)
     max_mp3_links = config.get("max_mp3_links", None)
     download_mp3s = config.get("download_mp3_files", False)
@@ -618,8 +617,8 @@ def main():
     # Hash-based duplicate detection is always enabled
     enable_hash_detection = True
 
-    # Handle absolute and relative paths for output directory
-    output_dir = os.path.abspath(os.path.expanduser(output_dir_config))
+    # Hardcoded output directory
+    output_dir = os.path.abspath(os.path.expanduser("~/podcasts"))
 
     # Handle both old list format and new dict format for backward compatibility
     if isinstance(urls_config, list):
