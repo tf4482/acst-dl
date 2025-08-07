@@ -23,7 +23,7 @@ from fastapi import (
     Form,
     HTTPException,
 )
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
@@ -393,6 +393,34 @@ async def files_page(request: Request):
             "output_dir": output_dir,
         },
     )
+
+
+@app.get("/files/serve/{folder_name}/{file_name}")
+async def serve_audio_file(folder_name: str, file_name: str):
+    """Serve MP3 files for audio playback and downloads"""
+    try:
+        output_dir = os.path.abspath("./podcasts")
+        file_path = os.path.join(output_dir, folder_name, file_name)
+
+        # Security check: ensure the file is within the output directory
+        if not os.path.abspath(file_path).startswith(output_dir):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Check if file exists and is an MP3
+        if not os.path.exists(file_path) or not file_name.lower().endswith(".mp3"):
+            raise HTTPException(status_code=404, detail="File not found")
+
+        return FileResponse(
+            file_path,
+            media_type="audio/mpeg",
+            filename=file_name,
+            headers={"Accept-Ranges": "bytes"},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
 
 
 @app.websocket("/ws")
