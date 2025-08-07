@@ -28,6 +28,7 @@ A Python script with a modern web interface for downloading MP3 files from podca
 - 📱 **Mobile Responsive**: Works seamlessly on desktop, tablet, and mobile devices
 - 🎧 **Audio Player**: Built-in audio player for listening to downloaded podcasts
 - 📈 **Statistics Dashboard**: Visual overview of download sessions and success rates
+- ⏰ **Automatic Scheduler**: Configurable automatic downloads at set intervals
 
 ## Installation
 
@@ -127,7 +128,11 @@ Create or modify the `acst-dl-config.json` file:
   "timeout": 30,
   "max_mp3_links": 5,
   "download_mp3_files": true,
-  "verify_ssl": true
+  "verify_ssl": true,
+  "scheduler": {
+    "enabled": false,
+    "interval_minutes": 60
+  }
 }
 ```
 
@@ -142,18 +147,22 @@ Create or modify the `acst-dl-config.json` file:
 | `max_mp3_links` | Number | `null` | Maximum number of MP3 links to extract per URL |
 | `download_mp3_files` | Boolean | `false` | **Set to `true` for MP3 downloading (main purpose)** |
 | `verify_ssl` | Boolean | `true` | Whether to verify SSL certificates |
+| `scheduler.enabled` | Boolean | `false` | Enable automatic downloads at scheduled intervals |
+| `scheduler.interval_minutes` | Number | `60` | Download interval in minutes (1-10080) |
 
 ## Web Interface Pages
 
 ### Dashboard (`/`)
 - **Overview Statistics**: Total URLs, recent sessions, active downloads, success rate
 - **Current Configuration Preview**: Quick view of current settings
+- **Scheduler Status**: Real-time automatic download scheduler monitoring
 - **Recent Download Sessions**: Live session tracking with status indicators
 - **Quick Actions**: Start downloads, refresh data, clear all files
 
 ### Configuration (`/config`)
 - **Podcast Feed Management**: Add, edit, and remove podcast feeds
 - **Download Settings**: Configure timeout, max links, SSL verification
+- **Scheduler Configuration**: Enable/disable automatic downloads with configurable intervals
 - **Live Validation**: Real-time URL validation and error checking
 - **Import/Export**: Backup and restore configuration settings
 
@@ -220,6 +229,16 @@ The script uses multiple methods to find MP3 links:
 - **Web-based file browser**: Navigate and manage files through the web interface
 - **Audio streaming**: Play MP3 files directly in the browser
 - **Secure file serving**: Protected file access with proper security checks
+
+### Automatic Download Scheduler ⏰
+
+- **Background Scheduling**: Automatic downloads run at configurable intervals
+- **Configurable Intervals**: Set download frequency from 1 minute to 1 week
+- **Real-time Status**: Live scheduler status monitoring on dashboard
+- **Auto-start**: Scheduler automatically starts on server startup if enabled
+- **Session Tracking**: Scheduled downloads are tracked like manual downloads
+- **WebSocket Updates**: Real-time scheduler status updates across all clients
+- **Start/Stop Control**: Easy enable/disable through web interface
 
 ## Dependencies
 
@@ -289,6 +308,9 @@ The web interface provides RESTful API endpoints:
 - `GET /download/session/{id}` - Get specific session details
 - `POST /files/clear` - Clear all downloaded files
 - `GET /files/serve/{folder}/{file}` - Serve MP3 files
+- `GET /scheduler/status` - Get current scheduler status
+- `POST /scheduler/start` - Start automatic scheduler
+- `POST /scheduler/stop` - Stop automatic scheduler
 - `WS /ws` - WebSocket endpoint for real-time updates
 
 ## Building Standalone Executable
@@ -354,6 +376,66 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 - **2.1.0** - Added reversed download order, timestamped filenames, and enhanced console output
 - **2.0.0** - Major update with hash-based duplicate detection and simplified configuration
 - **0.1.0** - Initial release with basic download and extraction functionality
+
+## Automatic Download Scheduler
+
+The scheduler feature allows you to automate podcast downloads at regular intervals, ensuring your collection stays up-to-date without manual intervention.
+
+### Configuration
+
+Enable the scheduler through the web interface Configuration page or by editing the config file:
+
+```json
+{
+  "scheduler": {
+    "enabled": true,
+    "interval_minutes": 60
+  }
+}
+```
+
+### Features
+
+- **Flexible Intervals**: Configure download frequency from 1 minute to 1 week (10080 minutes)
+- **Auto-start**: Scheduler automatically starts when the web server launches if enabled
+- **Real-time Monitoring**: Dashboard shows current status, next run time, and last run
+- **Session Tracking**: Scheduled downloads appear in session history with a "scheduled" flag
+- **Easy Control**: Start/stop scheduler directly from the dashboard
+- **Live Updates**: Scheduler status updates in real-time via WebSocket
+
+### Usage
+
+1. **Enable via Web Interface**:
+   - Go to Configuration page (`/config`)
+   - Check "Enable automatic downloads"
+   - Set desired interval in minutes
+   - Save configuration
+
+2. **Monitor Status**:
+   - Dashboard shows scheduler status section
+   - View next scheduled run time
+   - See last run timestamp
+   - Start/stop scheduler with one click
+
+3. **Scheduled Downloads**:
+   - Run automatically at configured intervals
+   - Process all configured podcast feeds
+   - Appear in session history
+   - Follow same duplicate detection rules
+
+### API Endpoints
+
+- `GET /scheduler/status` - Get current scheduler status
+- `POST /scheduler/start` - Start scheduler with specified interval
+- `POST /scheduler/stop` - Stop automatic scheduler
+
+## What's New in 3.1.0
+
+- ⏰ **Automatic Scheduler** — Configurable automatic downloads at set intervals
+- 📅 **Real-time Scheduler Monitoring** — Live status updates on dashboard
+- 🔄 **Background Task Management** — Robust scheduler with auto-restart capabilities
+- ⚙️ **Scheduler Configuration** — Easy enable/disable through web interface
+- 📊 **Enhanced Dashboard** — Scheduler status section with next run information
 
 ## What's New in 3.0.0
 
