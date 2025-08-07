@@ -141,6 +141,9 @@ def extract_mp3_links(html_content, base_url, max_links=None):
         if max_links:
             ordered_mp3_links = ordered_mp3_links[:max_links]
 
+        # Reverse order so the last-found MP3 is downloaded first
+        ordered_mp3_links = list(reversed(ordered_mp3_links))
+
         return ordered_mp3_links
 
     except Exception as e:
