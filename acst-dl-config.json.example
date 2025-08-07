@@ -1,7 +1,6 @@
 {
   "urls": {
-    "Podcast 1": "url",
-    "Podcast 2": "url"
+      "Kurz Informiert": "https://proxyfeed.svmaudio.com/feeds/heise/kurz-informiert"
   },
   "timeout": 30,
   "max_mp3_links": 5,
