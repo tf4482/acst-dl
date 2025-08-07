@@ -223,13 +223,17 @@
             const folder = this.dataset.folder;
             const file = this.dataset.file;
             
-            // Note: In a real implementation, you would need to serve the audio files
-            // through a proper endpoint that handles file serving
+            // Set up audio player with proper file serving
+            const audioUrl = `/files/serve/${encodeURIComponent(folder)}/${encodeURIComponent(file)}`;
             currentFileName.textContent = file;
+            audioPlayer.src = audioUrl;
             audioPlayerModal.classList.remove('hidden');
             
-            // This would need to be implemented with proper file serving
-            showToast('Audio playback would be implemented with proper file serving', 'info');
+            // Auto-play the audio
+            audioPlayer.play().catch(error => {
+                console.error('Error playing audio:', error);
+                showToast('Error playing audio file', 'error');
+            });
         });
     });
 
@@ -252,8 +256,16 @@
             const folder = this.dataset.folder;
             const file = this.dataset.file;
             
-            // Note: In a real implementation, you would need to implement file download
-            showToast('File download would be implemented with proper file serving', 'info');
+            // Create download link with proper file serving
+            const downloadUrl = `/files/serve/${encodeURIComponent(folder)}/${encodeURIComponent(file)}`;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = file;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast(`Downloading ${file}`, 'success');
         });
     });
 
