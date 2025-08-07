@@ -185,7 +185,7 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
 
 
 def download_mp3_file(mp3_url, output_dir, timeout=30, verify_ssl=True):
-    """Download a single MP3 file with hash-based filename duplicate detection."""
+    """Download a single MP3 file with hash-based duplicate detection across any local filename."""
     try:
         # Extract base filename from URL
         parsed_url = urlparse(mp3_url)
@@ -202,24 +202,31 @@ def download_mp3_file(mp3_url, output_dir, timeout=30, verify_ssl=True):
                 url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
                 base_filename = f"audio_{url_hash}.mp3"
 
-        # Generate filename using URL hash for unique naming and duplicate detection
+        # Compute URL hash (used for duplicate detection irrespective of filename)
         url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
         name_part = base_filename.rsplit(".", 1)[0]
 
-        # Generate filename without sequential numbering
+        # Proposed filename (still contains hash for consistency, but duplicate check is independent)
         filename = f"{name_part}_{url_hash}.mp3"
-
         filepath = os.path.join(output_dir, filename)
 
-        # Skip if file already exists (filename-based check with hash)
-        if os.path.exists(filepath):
-            print(f"    ⏭ Skipping {filename} (file already exists)")
-            return {
-                "success": True,
-                "filename": filename,
-                "skipped": True,
-                "duplicate": True,
-            }
+        # New: Skip if any existing MP3 in this subfolder already contains this hash in its filename
+        # This supports different base names while preventing re-download by URL hash.
+        try:
+            for existing in os.listdir(output_dir):
+                if existing.lower().endswith(".mp3") and url_hash in existing:
+                    print(
+                        f"    ⏭ Skipping (duplicate by hash {url_hash}) -> {existing}"
+                    )
+                    return {
+                        "success": True,
+                        "filename": existing,  # return the existing file name we matched
+                        "skipped": True,
+                        "duplicate": True,
+                    }
+        except FileNotFoundError:
+            # Directory may not exist yet; will be created by caller
+            pass
 
         # Set headers to mimic a real browser
         headers = {

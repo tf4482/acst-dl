@@ -85,12 +85,12 @@ Create or modify the [`acst-dl-config.json.example`](acst-dl-config.json.example
 ### Hash-Based Duplicate Detection & Automatic Cleanup
 
 The script now automatically prevents downloading duplicate MP3 files and keeps folders clean by:
-- 🔐 **Generating unique filenames** using MD5 hash of the URL (e.g., `media_43e4489f.mp3`)
-- 📁 **Checking file existence** before downloading
+- 🔐 **Embedding a URL hash** (MD5, first 8 chars) into filenames (e.g., `media_43e4489f.mp3`)
+- 📁 **Scanning for the URL hash in the current subfolder** before downloading; if any `.mp3` already contains that hash in its filename, the file is skipped as a duplicate (even if the base name differs)
 - ⚡ **Skipping duplicates** automatically without any configuration needed
 - 🧹 **Automatic old file cleanup** - removes MP3 files not in current download set
 - 🗑️ **Keeps only recent files** - maintains clean directories with latest episodes
-- 🎯 **No database required** - uses simple filename-based detection and memory tracking
+- 🎯 **No database required** - uses simple hash-in-filename detection within the subfolder plus in-memory tracking during a run
 
 ## Usage
 
@@ -112,12 +112,13 @@ The script will:
 ```
 output_directory/
 ├── Podcast Name 1/
-│   └── media_43e4489f.mp3 (hash-based filename)
-│   └── media_7ac9803d.mp3 (hash-based filename)
+│   └── media_43e4489f.mp3   (contains URL hash 43e4489f)
+│   └── episodeA_7ac9803d.mp3
 └── Podcast Name 2/
-    └── media_20830c0e.mp3 (hash-based filename)
-    └── media_32758bac.mp3 (hash-based filename)
+    └── audio_20830c0e.mp3
+    └── ep-12_32758bac.mp3
 ```
+Note: If another file like `episode-001_43e4489f.mp3` is already present in `Podcast Name 1/`, any new URL that hashes to `43e4489f` will be skipped as a duplicate, regardless of the differing base name.
 
 **Note**: Temporary content and MP3 links files are automatically cleaned up after successful downloads.
 
@@ -126,10 +127,10 @@ output_directory/
 ### Hash-Based Duplicate Detection & Automatic Cleanup 🔐
 
 The script automatically prevents downloading duplicate files and maintains clean directories by:
-- **URL-based hashing**: Each MP3 URL generates a unique MD5 hash
+- **URL-based hashing**: Each MP3 URL generates a unique MD5 hash (first 8 chars used)
 - **Clean filenames**: Files are named as: `{base_name}_{hash}.mp3`
-- **Instant duplicate detection**: Same URLs always produce the same filename
-- **Memory tracking**: Stores current filenames during download process
+- **Subfolder hash matching**: Before download, the current feed’s subfolder is scanned; if any existing `.mp3` filename contains the same hash, the download is skipped as a duplicate (filename equality not required)
+- **Memory tracking**: Stores current filenames during download process for summary and cleanup
 - **Automatic cleanup**: Removes old MP3 files not in current download set
 - **Keep only recent**: Maintains clean directories with latest episodes only
 - **No configuration needed**: Works automatically without any setup
@@ -246,7 +247,7 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 
 **SSL certificate errors**: Set `"verify_ssl": false` in the configuration to bypass SSL certificate verification for problematic servers.
 
-**Duplicate detection**: Files with the same URL will always generate the same hash-based filename, preventing re-downloads.
+**Duplicate detection**: Files with the same URL produce the same hash. The downloader skips a new download if any `.mp3` in the current subfolder already contains that hash in its filename, even when the base names differ.
 
 ### Console Output
 
@@ -271,7 +272,7 @@ For debugging, you can modify the script to add more verbose logging or run with
 
 ## What's New in 2.0.0
 
-- 🔐 **Hash-based duplicate detection** - Automatically prevents re-downloading the same files
+- 🔐 **Hash-based duplicate detection** - Skips downloads when the URL hash is already present in any existing filename within the same subfolder
 - 🎨 **Rich emoji output** - Enhanced console experience with meaningful visual indicators
 - ⏳ **Single-line progress** - Clean progress display that updates in place
 - 🧹 **Automatic cleanup** - Always removes temporary files when MP3 downloading is enabled
