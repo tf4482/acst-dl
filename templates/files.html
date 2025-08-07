@@ -325,5 +325,180 @@
     document.querySelectorAll('.folder-content').forEach(content => {
         content.style.display = 'block';
     });
+
+    // Handle live file updates
+    function handleFileUpdate(data) {
+        // Update statistics cards
+        const statsCards = document.querySelectorAll('.grid.grid-cols-1.gap-5.sm\\:grid-cols-2 .bg-white dd');
+        if (statsCards[0]) {
+            statsCards[0].textContent = data.total_folders;
+        }
+        if (statsCards[1]) {
+            statsCards[1].textContent = data.total_files;
+        }
+
+        // Update file browser
+        const filesBrowser = document.querySelector('.bg-white.shadow.rounded-lg .px-4.py-5.sm\\:p-6');
+        if (filesBrowser) {
+            const contentDiv = filesBrowser.querySelector('div:last-child');
+            if (contentDiv) {
+                if (Object.keys(data.files_structure).length > 0) {
+                    // Rebuild file structure
+                    let html = '<div class="space-y-6">';
+                    
+                    for (const [folderName, files] of Object.entries(data.files_structure)) {
+                        html += `
+                            <div class="border border-gray-200 rounded-lg">
+                                <!-- Folder Header -->
+                                <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <button class="folder-toggle mr-3 text-gray-400 hover:text-gray-600 focus:outline-none" data-folder="${folderName}">
+                                            <i class="fas fa-chevron-down transform transition-transform duration-200"></i>
+                                        </button>
+                                        <i class="fas fa-folder text-blue-500 mr-2"></i>
+                                        <h4 class="text-sm font-medium text-gray-900">
+                                            ${folderName}
+                                        </h4>
+                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            ${files.length} files
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <button class="open-folder-btn inline-flex items-center px-2 py-1 border border-gray-300 shadow-sm text-xs leading-4 font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" data-folder="${folderName}">
+                                            <i class="fas fa-external-link-alt mr-1"></i>
+                                            Open Folder
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Files List -->
+                                <div class="folder-content" data-folder="${folderName}" style="display: block;">
+                                    <div class="divide-y divide-gray-200">`;
+                        
+                        for (const file of files) {
+                            html += `
+                                <div class="px-4 py-3 flex items-center justify-between hover:bg-gray-50">
+                                    <div class="flex items-center min-w-0 flex-1">
+                                        <i class="fas fa-file-audio text-green-500 mr-3"></i>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-sm font-medium text-gray-900 truncate" title="${file}">
+                                                ${file}
+                                            </p>
+                                            <p class="text-sm text-gray-500">
+                                                MP3 Audio File
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <button class="play-file-btn inline-flex items-center px-2 py-1 border border-gray-300 shadow-sm text-xs leading-4 font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" data-folder="${folderName}" data-file="${file}">
+                                            <i class="fas fa-play mr-1"></i>
+                                            Play
+                                        </button>
+                                        <button class="download-file-btn inline-flex items-center px-2 py-1 border border-gray-300 shadow-sm text-xs leading-4 font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" data-folder="${folderName}" data-file="${file}">
+                                            <i class="fas fa-download mr-1"></i>
+                                            Download
+                                        </button>
+                                    </div>
+                                </div>`;
+                        }
+                        
+                        html += `
+                                    </div>
+                                </div>
+                            </div>`;
+                    }
+                    
+                    html += '</div>';
+                    contentDiv.innerHTML = html;
+                    
+                    // Re-attach event listeners
+                    attachFileEventListeners();
+                } else {
+                    // Show empty state
+                    contentDiv.innerHTML = `
+                        <div class="text-center py-12">
+                            <i class="fas fa-folder-open text-gray-400 text-6xl mb-4"></i>
+                            <h3 class="text-lg font-medium text-gray-900 mb-2">No files found</h3>
+                            <p class="text-gray-500 mb-6">No downloaded podcast files were found. Start a download to see files here.</p>
+                            <a href="/" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                <i class="fas fa-download mr-2"></i>
+                                Start Download
+                            </a>
+                        </div>`;
+                }
+            }
+        }
+    }
+
+    // Function to re-attach event listeners after dynamic content update
+    function attachFileEventListeners() {
+        // Folder toggle functionality
+        document.querySelectorAll('.folder-toggle').forEach(button => {
+            button.addEventListener('click', function() {
+                const folderName = this.dataset.folder;
+                const content = document.querySelector(`[data-folder="${folderName}"].folder-content`);
+                const icon = this.querySelector('i');
+                
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-down');
+                } else {
+                    content.style.display = 'none';
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-right');
+                }
+            });
+        });
+
+        // Play file functionality
+        document.querySelectorAll('.play-file-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const folder = this.dataset.folder;
+                const file = this.dataset.file;
+                
+                // Set up audio player with proper file serving
+                const audioUrl = `/files/serve/${encodeURIComponent(folder)}/${encodeURIComponent(file)}`;
+                currentFileName.textContent = file;
+                audioPlayer.src = audioUrl;
+                audioPlayerModal.classList.remove('hidden');
+                
+                // Auto-play the audio
+                audioPlayer.play().catch(error => {
+                    console.error('Error playing audio:', error);
+                    showToast('Error playing audio file', 'error');
+                });
+            });
+        });
+
+        // Download file functionality
+        document.querySelectorAll('.download-file-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const folder = this.dataset.folder;
+                const file = this.dataset.file;
+                
+                // Create download link with proper file serving
+                const downloadUrl = `/files/serve/${encodeURIComponent(folder)}/${encodeURIComponent(file)}`;
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = file;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                showToast(`Downloading ${file}`, 'success');
+            });
+        });
+
+        // Open folder functionality
+        document.querySelectorAll('.open-folder-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const folder = this.dataset.folder;
+                
+                // Note: This would open the folder in the system file manager
+                showToast('Folder opening would be implemented with system integration', 'info');
+            });
+        });
+    }
 </script>
 {% endblock %}

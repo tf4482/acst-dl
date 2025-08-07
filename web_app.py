@@ -119,6 +119,55 @@ async def broadcast_update(message: dict):
             active_websockets.remove(ws)
 
 
+async def get_file_structure():
+    """Get current file structure for live updates"""
+    output_dir = os.path.abspath("./podcasts")
+    files_structure = {}
+
+    if os.path.exists(output_dir):
+        for root, dirs, files in os.walk(output_dir):
+            rel_path = os.path.relpath(root, output_dir)
+            if rel_path == ".":
+                rel_path = ""
+
+            mp3_files = [f for f in files if f.lower().endswith(".mp3")]
+            if mp3_files:
+                files_structure[rel_path or "root"] = mp3_files
+
+    return files_structure
+
+
+async def broadcast_file_update():
+    """Broadcast file structure updates to all clients"""
+    files_structure = await get_file_structure()
+    total_files = sum(len(files) for files in files_structure.values())
+
+    await broadcast_update(
+        {
+            "type": "file_update",
+            "files_structure": files_structure,
+            "total_folders": len(files_structure),
+            "total_files": total_files,
+        }
+    )
+
+
+async def broadcast_config_update():
+    """Broadcast configuration updates to all clients"""
+    try:
+        config = load_config()
+    except:
+        config = {
+            "urls": {},
+            "timeout": 30,
+            "max_mp3_links": 5,
+            "download_mp3_files": True,
+            "verify_ssl": True,
+        }
+
+    await broadcast_update({"type": "config_update", "config": config})
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Main dashboard page"""
@@ -186,6 +235,9 @@ async def save_config(
         config_path = "acst-dl-config.json"
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
+
+        # Broadcast config update to all clients
+        await broadcast_config_update()
 
         return JSONResponse(
             {"success": True, "message": "Configuration saved successfully"}
@@ -316,6 +368,9 @@ async def run_download_session(session_id: str):
             }
         )
 
+        # Broadcast file update since new files may have been downloaded
+        await broadcast_file_update()
+
     except Exception as e:
         # Mark session as failed
         download_manager.update_session(
@@ -423,6 +478,14 @@ async def serve_audio_file(folder_name: str, file_name: str):
         raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
 
 
+@app.get("/api/trigger-updates")
+async def trigger_updates():
+    """Trigger all live updates for newly connected clients"""
+    await broadcast_file_update()
+    await broadcast_config_update()
+    return JSONResponse({"success": True, "message": "Updates triggered"})
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time updates"""
@@ -430,11 +493,19 @@ async def websocket_endpoint(websocket: WebSocket):
     active_websockets.append(websocket)
 
     try:
+        # Send initial updates when client connects
+        await asyncio.sleep(0.1)  # Small delay to ensure connection is ready
+        await broadcast_file_update()
+        await broadcast_config_update()
+
         while True:
-            # Keep connection alive
-            await websocket.receive_text()
+            # Keep connection alive and handle incoming messages
+            message = await websocket.receive_text()
+            # Echo back for heartbeat
+            await websocket.send_text("pong")
     except WebSocketDisconnect:
-        active_websockets.remove(websocket)
+        if websocket in active_websockets:
+            active_websockets.remove(websocket)
 
 
 if __name__ == "__main__":
