@@ -51,8 +51,16 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Ensure static directory exists before mounting
+static_dir = "static"
+if not os.path.exists(static_dir):
+    print(f"📁 Creating missing static directory: {static_dir}")
+    os.makedirs(static_dir, exist_ok=True)
+    os.makedirs(os.path.join(static_dir, 'css'), exist_ok=True)
+    os.makedirs(os.path.join(static_dir, 'js'), exist_ok=True)
+
 # Static files and templates
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # Global state for managing downloads
