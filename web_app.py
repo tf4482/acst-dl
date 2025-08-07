@@ -73,7 +73,6 @@ class DownloadManager:
             "id": session_id,
             "config": config,
             "status": "pending",
-            "progress": 0,
             "total_urls": len(config.get("urls", {})),
             "completed_urls": 0,
             "current_url": None,
@@ -168,6 +167,12 @@ async def broadcast_config_update():
     await broadcast_update({"type": "config_update", "config": config})
 
 
+async def broadcast_sessions_update():
+    """Broadcast sessions list updates to all clients"""
+    sessions = download_manager.get_all_sessions()
+    await broadcast_update({"type": "sessions_update", "sessions": sessions})
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Main dashboard page"""
@@ -258,11 +263,43 @@ async def start_download():
         # Load current config
         config = load_config()
 
+        # Validate URLs before creating session
+        urls_dict = config.get("urls", {})
+        if not urls_dict:
+            raise HTTPException(status_code=400, detail="No URLs configured")
+
+        # Quick validation of first URL to catch obvious errors early
+        first_url = next(iter(urls_dict.values()))
+        try:
+            import requests
+
+            # Quick HEAD request to validate URL accessibility
+            response = requests.head(first_url, timeout=5, allow_redirects=True)
+            if response.status_code >= 400:
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "message": f"URL validation failed: {response.status_code} {response.reason}",
+                    },
+                    status_code=400,
+                )
+        except requests.exceptions.RequestException as e:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "message": f"URL validation failed: {str(e)}",
+                },
+                status_code=400,
+            )
+
         # Create new download session
         session_id = download_manager.create_session(config)
 
         # Start download in background
         asyncio.create_task(run_download_session(session_id))
+
+        # Broadcast sessions update
+        await broadcast_sessions_update()
 
         return JSONResponse(
             {
@@ -272,6 +309,8 @@ async def start_download():
             }
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error starting download: {str(e)}"
@@ -285,17 +324,21 @@ async def run_download_session(session_id: str):
         return
 
     try:
-        # Update session status
+        # Update session status to running
         download_manager.update_session(
             session_id, {"status": "running", "started_at": datetime.now().isoformat()}
         )
 
+        # Broadcast session update immediately
         await broadcast_update(
             {
                 "type": "session_update",
                 "session": download_manager.get_session(session_id),
             }
         )
+
+        # Also broadcast sessions list update
+        await broadcast_sessions_update()
 
         config = session["config"]
         urls_dict = config.get("urls", {})
@@ -312,16 +355,18 @@ async def run_download_session(session_id: str):
                 session_id,
                 {
                     "current_url": url_name,
-                    "progress": int((i - 1) / len(urls_dict) * 100),
                 },
             )
 
+            # Broadcast both session update and sessions list update
             await broadcast_update(
                 {
                     "type": "session_update",
                     "session": download_manager.get_session(session_id),
                 }
             )
+
+            await broadcast_sessions_update()
 
             # Create subfolder for this URL
             url_output_dir = os.path.join(output_dir, url_name)
@@ -344,6 +389,27 @@ async def run_download_session(session_id: str):
                 total_mp3_stats["downloaded"] += mp3_stats.get("successful", 0)
                 total_mp3_stats["failed"] += mp3_stats.get("failed", 0)
                 total_mp3_stats["skipped"] += mp3_stats.get("skipped", 0)
+            elif isinstance(result, dict) and not result.get("success"):
+                # Handle download failure - mark session as failed
+                download_manager.update_session(
+                    session_id,
+                    {
+                        "status": "failed",
+                        "error": result.get("error", "Download failed"),
+                        "completed_at": datetime.now().isoformat(),
+                    },
+                )
+
+                await broadcast_update(
+                    {
+                        "type": "session_update",
+                        "session": download_manager.get_session(session_id),
+                    }
+                )
+
+                # Broadcast sessions update for statistics
+                await broadcast_sessions_update()
+                return
 
             # Update completed URLs
             download_manager.update_session(
@@ -355,7 +421,6 @@ async def run_download_session(session_id: str):
             session_id,
             {
                 "status": "completed",
-                "progress": 100,
                 "current_url": None,
                 "completed_at": datetime.now().isoformat(),
             },
@@ -367,6 +432,9 @@ async def run_download_session(session_id: str):
                 "session": download_manager.get_session(session_id),
             }
         )
+
+        # Broadcast sessions update for statistics
+        await broadcast_sessions_update()
 
         # Broadcast file update since new files may have been downloaded
         await broadcast_file_update()
@@ -388,6 +456,9 @@ async def run_download_session(session_id: str):
                 "session": download_manager.get_session(session_id),
             }
         )
+
+        # Broadcast sessions update for statistics
+        await broadcast_sessions_update()
 
 
 @app.get("/download/sessions")

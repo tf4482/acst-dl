@@ -235,14 +235,6 @@
                                                 {{ session.mp3_stats.downloaded }} MP3s downloaded
                                             </p>
                                         </div>
-                                        {% if session.status == 'running' %}
-                                            <div class="w-24">
-                                                <div class="bg-gray-200 rounded-full h-2">
-                                                    <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: {{ session.progress }}%"></div>
-                                                </div>
-                                                <p class="text-xs text-gray-500 mt-1 text-center">{{ session.progress }}%</p>
-                                            </div>
-                                        {% endif %}
                                     </div>
                                 </div>
                                 {% if session.error %}
@@ -290,31 +282,33 @@
     }
 
     function updateSessionCard(card, session) {
+        console.log('Updating session card:', session.id, 'Status:', session.status);
+        
         // Update status icon
         const icon = card.querySelector('.fas');
-        icon.className = 'fas text-xl ' + getStatusIcon(session.status);
-        
-        // Update progress bar if running
-        const progressBar = card.querySelector('.bg-blue-600');
-        const progressText = card.querySelector('.text-xs.text-gray-500');
-        if (progressBar && session.status === 'running') {
-            progressBar.style.width = session.progress + '%';
-            progressText.textContent = session.progress + '%';
+        if (icon) {
+            icon.className = 'fas text-xl ' + getStatusIcon(session.status);
         }
         
         // Update current URL
         const titleElement = card.querySelector('.text-sm.font-medium.text-gray-900');
-        let title = `Session ${session.id.substring(0, 8)}`;
-        if (session.current_url) {
-            title += ` - Processing: ${session.current_url}`;
+        if (titleElement) {
+            let title = `Session ${session.id.substring(0, 8)}`;
+            if (session.current_url) {
+                title += ` - Processing: ${session.current_url}`;
+            }
+            titleElement.textContent = title;
         }
-        titleElement.textContent = title;
         
         // Update counts
         const urlsCount = card.querySelector('.text-right .text-sm.font-medium');
         const mp3Count = card.querySelector('.text-right .text-sm.text-gray-500');
-        urlsCount.textContent = `${session.completed_urls}/${session.total_urls} URLs`;
-        mp3Count.textContent = `${session.mp3_stats.downloaded} MP3s downloaded`;
+        if (urlsCount) {
+            urlsCount.textContent = `${session.completed_urls}/${session.total_urls} URLs`;
+        }
+        if (mp3Count) {
+            mp3Count.textContent = `${session.mp3_stats.downloaded} MP3s downloaded`;
+        }
     }
 
     function getStatusIcon(status) {
@@ -348,13 +342,6 @@
 
     function createSessionCardHTML(session) {
         const statusIcon = getStatusIcon(session.status);
-        const progressBar = session.status === 'running' ? 
-            `<div class="w-24">
-                <div class="bg-gray-200 rounded-full h-2">
-                    <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: ${session.progress}%"></div>
-                </div>
-                <p class="text-xs text-gray-500 mt-1 text-center">${session.progress}%</p>
-            </div>` : '';
         
         return `
             <div class="session-card border border-gray-200 rounded-lg p-4" data-session-id="${session.id}">
@@ -382,7 +369,6 @@
                                 ${session.mp3_stats.downloaded} MP3s downloaded
                             </p>
                         </div>
-                        ${progressBar}
                     </div>
                 </div>
                 ${session.error ? `
@@ -532,6 +518,112 @@
         if (urlsStatsCard) {
             urlsStatsCard.textContent = Object.keys(config.urls).length;
         }
+    }
+
+    // Handle live session updates for dashboard statistics
+    function handleSessionUpdate(session) {
+        const sessionCard = document.querySelector(`[data-session-id="${session.id}"]`);
+        if (sessionCard) {
+            updateSessionCard(sessionCard, session);
+        } else {
+            // Add new session card if it doesn't exist
+            addNewSessionCard(session);
+        }
+        
+        // Update dashboard statistics
+        updateDashboardStats();
+    }
+
+    // Update dashboard statistics cards
+    function updateDashboardStats() {
+        // Get all session cards
+        const sessionCards = document.querySelectorAll('[data-session-id]');
+        const totalSessions = sessionCards.length;
+        
+        // Count sessions by status
+        let completedSessions = 0;
+        let runningSessions = 0;
+        
+        sessionCards.forEach(card => {
+            const icon = card.querySelector('.fas');
+            if (icon.classList.contains('fa-check-circle')) {
+                completedSessions++;
+            } else if (icon.classList.contains('fa-spinner')) {
+                runningSessions++;
+            }
+        });
+        
+        // Update stats cards
+        const statsCards = document.querySelectorAll('.grid.grid-cols-1.gap-5.sm\\:grid-cols-2.lg\\:grid-cols-4 .bg-white');
+        
+        // Update Recent Sessions count (second card)
+        if (statsCards[1]) {
+            const recentSessionsCount = statsCards[1].querySelector('dd');
+            if (recentSessionsCount) {
+                recentSessionsCount.textContent = totalSessions;
+            }
+        }
+        
+        // Update Active Downloads count (third card)
+        if (statsCards[2]) {
+            const activeDownloadsCount = statsCards[2].querySelector('dd');
+            if (activeDownloadsCount) {
+                activeDownloadsCount.textContent = runningSessions;
+            }
+        }
+        
+        // Update Success Rate (fourth card)
+        if (statsCards[3]) {
+            const successRateElement = statsCards[3].querySelector('dd');
+            if (successRateElement && totalSessions > 0) {
+                const successRate = Math.round((completedSessions / totalSessions) * 100);
+                successRateElement.textContent = successRate + '%';
+            } else if (successRateElement) {
+                successRateElement.textContent = 'N/A';
+            }
+        }
+    }
+
+    // Handle live sessions list updates
+    function handleSessionsUpdate(sessions) {
+        const sessionsContainer = document.getElementById('sessions-container');
+        if (!sessionsContainer) return;
+
+        if (sessions.length > 0) {
+            // Rebuild sessions list
+            let html = '<div class="space-y-4">';
+            
+            sessions.slice(0, 10).forEach(session => {
+                html += createSessionCardHTML(session);
+            });
+            
+            html += '</div>';
+            sessionsContainer.innerHTML = html;
+        } else {
+            // Show empty state
+            sessionsContainer.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-download text-gray-400 text-4xl mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No download sessions yet</h3>
+                    <p class="text-gray-500 mb-4">Start your first download to see session history here.</p>
+                    <button id="start-first-download" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <i class="fas fa-download mr-2"></i>
+                        Start Download
+                    </button>
+                </div>
+            `;
+            
+            // Re-attach event listener for start first download button
+            const startFirstBtn = document.getElementById('start-first-download');
+            if (startFirstBtn) {
+                startFirstBtn.addEventListener('click', function() {
+                    document.getElementById('start-download-btn').click();
+                });
+            }
+        }
+        
+        // Update dashboard statistics
+        updateDashboardStats();
     }
 </script>
 {% endblock %}

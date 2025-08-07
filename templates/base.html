@@ -163,19 +163,27 @@
         }
 
         function handleWebSocketMessage(data) {
+            console.log('WebSocket message received:', data.type, data);
+            
             if (data.type === 'session_update') {
                 updateSessionDisplay(data.session);
             } else if (data.type === 'file_update') {
                 updateFileDisplay(data);
             } else if (data.type === 'config_update') {
                 updateConfigDisplay(data.config);
+            } else if (data.type === 'sessions_update') {
+                updateSessionsDisplay(data.sessions);
             }
         }
 
         function updateSessionDisplay(session) {
+            console.log('updateSessionDisplay called with session:', session);
             // This will be implemented in individual pages
             if (typeof handleSessionUpdate === 'function') {
+                console.log('Calling handleSessionUpdate');
                 handleSessionUpdate(session);
+            } else {
+                console.log('handleSessionUpdate function not found');
             }
         }
 
@@ -190,6 +198,13 @@
             // This will be implemented in individual pages
             if (typeof handleConfigUpdate === 'function') {
                 handleConfigUpdate(config);
+            }
+        }
+
+        function updateSessionsDisplay(sessions) {
+            // This will be implemented in individual pages
+            if (typeof handleSessionsUpdate === 'function') {
+                handleSessionsUpdate(sessions);
             }
         }
 
