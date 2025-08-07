@@ -1,6 +1,16 @@
 # Use Python 3.11 slim image as base
 FROM python:3.11-slim
 
+# Add metadata labels for GitHub Container Registry
+LABEL org.opencontainers.image.title="ACST-DL"
+LABEL org.opencontainers.image.description="A Podcast MP3 Downloader with modern web interface for downloading MP3 files from podcast feeds"
+LABEL org.opencontainers.image.url="https://github.com/OWNER/REPO"
+LABEL org.opencontainers.image.source="https://github.com/OWNER/REPO"
+LABEL org.opencontainers.image.version="3.1.0"
+LABEL org.opencontainers.image.vendor="ACST-DL"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.documentation="https://github.com/OWNER/REPO#readme"
+
 # Set working directory
 WORKDIR /app
 

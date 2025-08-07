@@ -38,16 +38,33 @@ A Python script with a modern web interface for downloading MP3 files from podca
 - Poetry (recommended) or pip
 - Docker (optional, for containerized deployment)
 
-### Option 1: Docker (Recommended for Production)
+### Option 1: Docker from GitHub Container Registry (Recommended)
 
-The easiest way to run ACST-DL is using Docker:
+The easiest way to run ACST-DL is using the pre-built Docker image from GitHub Container Registry:
+
+```bash
+# Pull and run the latest image directly
+docker run -d -p 5000:5000 \
+  -v ./podcasts:/app/podcasts \
+  -v ./acst-dl-config.json:/app/acst-dl-config.json \
+  --name acst-dl-app \
+  ghcr.io/OWNER/REPO:latest
+
+# Or using Docker Compose with the pre-built image
+curl -O https://raw.githubusercontent.com/OWNER/REPO/main/docker-compose.ghcr.yml
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+### Option 2: Docker Build from Source
+
+If you want to build the image yourself:
 
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd acst-dl
 
-# Using Docker Compose (recommended)
+# Using Docker Compose (builds from source)
 docker compose up -d
 
 # Or using Docker directly
@@ -317,9 +334,64 @@ The script supports the old array format for URLs:
 
 ## Docker Deployment
 
-### Docker Compose (Recommended)
+### GitHub Container Registry (Production Ready)
 
-The easiest way to deploy ACST-DL is using Docker Compose:
+ACST-DL is automatically built and published to GitHub Container Registry with every release. This provides:
+
+- **Multi-architecture support** (AMD64 and ARM64)
+- **Automatic security scanning**
+- **Signed container images** with cosign
+- **Version tags** for stable deployments
+
+#### Quick Start with GHCR
+
+```bash
+# Pull and run the latest stable version
+docker run -d -p 5000:5000 \
+  -v ./podcasts:/app/podcasts \
+  -v ./acst-dl-config.json:/app/acst-dl-config.json \
+  --name acst-dl-app \
+  --restart unless-stopped \
+  ghcr.io/OWNER/REPO:latest
+
+# Or use a specific version
+docker run -d -p 5000:5000 \
+  -v ./podcasts:/app/podcasts \
+  -v ./acst-dl-config.json:/app/acst-dl-config.json \
+  --name acst-dl-app \
+  --restart unless-stopped \
+  ghcr.io/OWNER/REPO:v3.1.0
+```
+
+#### Using Docker Compose with GHCR
+
+```bash
+# Download the GHCR compose file
+curl -O https://raw.githubusercontent.com/OWNER/REPO/main/docker-compose.ghcr.yml
+
+# Start the application
+docker compose -f docker-compose.ghcr.yml up -d
+
+# View logs
+docker compose -f docker-compose.ghcr.yml logs -f
+
+# Stop the application
+docker compose -f docker-compose.ghcr.yml down
+
+# Update to latest version
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+#### Available Image Tags
+
+- `latest` - Latest stable release from main branch
+- `v3.1.0`, `v3.0.0` - Specific version releases
+- `main` - Latest development build from main branch
+
+### Docker Compose (Build from Source)
+
+If you prefer to build from source:
 
 ```bash
 # Start the application
@@ -535,26 +607,3 @@ Enable the scheduler through the web interface Configuration page or by editing 
 - `GET /scheduler/status` - Get current scheduler status
 - `POST /scheduler/start` - Start scheduler with specified interval
 - `POST /scheduler/stop` - Stop automatic scheduler
-
-## What's New in 3.1.0
-
-- ⏰ **Automatic Scheduler** — Configurable automatic downloads at set intervals
-- 📅 **Real-time Scheduler Monitoring** — Live status updates on dashboard
-- 🔄 **Background Task Management** — Robust scheduler with auto-restart capabilities
-- ⚙️ **Scheduler Configuration** — Easy enable/disable through web interface
-- 📊 **Enhanced Dashboard** — Scheduler status section with next run information
-
-## What's New in 3.0.0
-
-- 🌐 **Complete Web Interface** — Modern FastAPI-based web application with Tailwind CSS
-- 📊 **Real-time Dashboard** — Live session tracking and statistics with WebSocket updates
-- ⚙️ **Web Configuration** — Easy-to-use forms for managing podcast feeds and settings
-- 📁 **File Browser** — Web-based file management with audio player
-- 🔄 **Live Updates** — Real-time session status and file structure updates
-- 📱 **Mobile Responsive** — Optimized for all device sizes
-- 🎧 **Audio Streaming** — Built-in MP3 player for web-based listening
-- 🔒 **Secure File Serving** — Protected file access with proper security checks
-- 📈 **Enhanced Statistics** — Visual dashboard with success rates and session tracking
-- 🗂️ **Hardcoded Output Directory** — Simplified to `./podcasts` for consistency
-- ⚡ **Session Management** — Track multiple concurrent download sessions
-- 🎯 **URL Validation** — Pre-download validation to catch invalid feeds early
