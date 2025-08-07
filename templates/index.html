@@ -484,5 +484,54 @@
             document.getElementById('start-download-btn').click();
         });
     }
+
+    // Handle live config updates
+    function handleConfigUpdate(config) {
+        // Update configuration preview section
+        const configSection = document.querySelector('.bg-white.shadow.rounded-lg');
+        if (configSection) {
+            // Update timeout
+            const timeoutElement = configSection.querySelector('dd');
+            if (timeoutElement && timeoutElement.textContent.includes('seconds')) {
+                timeoutElement.textContent = config.timeout + ' seconds';
+            }
+            
+            // Update max MP3 links
+            const maxLinksElements = configSection.querySelectorAll('dd');
+            if (maxLinksElements[1]) {
+                maxLinksElements[1].textContent = config.max_mp3_links ? config.max_mp3_links : 'Unlimited';
+            }
+            
+            // Update download MP3 files status
+            const downloadStatusElement = maxLinksElements[2];
+            if (downloadStatusElement) {
+                const isEnabled = config.download_mp3_files;
+                downloadStatusElement.innerHTML = isEnabled ?
+                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><i class="fas fa-check mr-1"></i>Enabled</span>' :
+                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"><i class="fas fa-times mr-1"></i>Disabled</span>';
+            }
+            
+            // Update SSL verification status
+            const sslStatusElement = maxLinksElements[3];
+            if (sslStatusElement) {
+                const isEnabled = config.verify_ssl;
+                sslStatusElement.innerHTML = isEnabled ?
+                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><i class="fas fa-shield-alt mr-1"></i>Enabled</span>' :
+                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"><i class="fas fa-shield-alt mr-1"></i>Disabled</span>';
+            }
+            
+            // Update configured URLs count
+            const urlsCountElement = maxLinksElements[4];
+            if (urlsCountElement) {
+                urlsCountElement.textContent = Object.keys(config.urls).length + ' podcast feeds';
+            }
+        }
+        
+        // Update stats card for configured URLs
+        const urlsStatsCard = document.querySelector('.grid.grid-cols-1.gap-5.sm\\:grid-cols-2.lg\\:grid-cols-4 .bg-white:first-child dd');
+        if (urlsStatsCard) {
+            urlsStatsCard.textContent = Object.keys(config.urls).length;
+        }
+    }
 </script>
 {% endblock %}

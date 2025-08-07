@@ -98,6 +98,7 @@
         // WebSocket connection
         let ws = null;
         let reconnectInterval = null;
+        let heartbeatInterval = null;
 
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -113,17 +114,42 @@
                     clearInterval(reconnectInterval);
                     reconnectInterval = null;
                 }
+                
+                // Start heartbeat
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                }
+                heartbeatInterval = setInterval(function() {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send('ping');
+                    }
+                }, 30000); // Send heartbeat every 30 seconds
             };
             
             ws.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                handleWebSocketMessage(data);
+                if (event.data === 'pong') {
+                    // Heartbeat response, ignore
+                    return;
+                }
+                
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (e) {
+                    console.error('Error parsing WebSocket message:', e);
+                }
             };
             
             ws.onclose = function() {
                 console.log('WebSocket disconnected');
                 document.getElementById('connected-indicator').classList.add('hidden');
                 document.getElementById('disconnected-indicator').classList.remove('hidden');
+                
+                // Clear heartbeat
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                    heartbeatInterval = null;
+                }
                 
                 // Attempt to reconnect
                 if (!reconnectInterval) {
@@ -139,6 +165,10 @@
         function handleWebSocketMessage(data) {
             if (data.type === 'session_update') {
                 updateSessionDisplay(data.session);
+            } else if (data.type === 'file_update') {
+                updateFileDisplay(data);
+            } else if (data.type === 'config_update') {
+                updateConfigDisplay(data.config);
             }
         }
 
@@ -146,6 +176,20 @@
             // This will be implemented in individual pages
             if (typeof handleSessionUpdate === 'function') {
                 handleSessionUpdate(session);
+            }
+        }
+
+        function updateFileDisplay(data) {
+            // This will be implemented in individual pages
+            if (typeof handleFileUpdate === 'function') {
+                handleFileUpdate(data);
+            }
+        }
+
+        function updateConfigDisplay(config) {
+            // This will be implemented in individual pages
+            if (typeof handleConfigUpdate === 'function') {
+                handleConfigUpdate(config);
             }
         }
 
