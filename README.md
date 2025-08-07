@@ -112,13 +112,17 @@ The script will:
 ```
 output_directory/
 ├── Podcast Name 1/
-│   └── media_43e4489f.mp3   (contains URL hash 43e4489f)
-│   └── episodeA_7ac9803d.mp3
+│   └── 2025-08-07-023015123456_media_43e4489f.mp3   (timestamp prefix + URL hash)
+│   └── 2025-08-07-023020654321_episodeA_7ac9803d.mp3
 └── Podcast Name 2/
-    └── audio_20830c0e.mp3
-    └── ep-12_32758bac.mp3
+    └── 2025-08-07-030001000111_audio_20830c0e.mp3
+    └── 2025-08-07-030501222333_ep-12_32758bac.mp3
 ```
-Note: If another file like `episode-001_43e4489f.mp3` is already present in `Podcast Name 1/`, any new URL that hashes to `43e4489f` will be skipped as a duplicate, regardless of the differing base name.
+
+- Filenames are prefixed with a high-resolution timestamp in the format `YYYY-MM-DD-HHMMSSSSSS` (microseconds).
+- MP3 downloads per page are initiated in reverse order of appearance (last-found first).
+
+Note: If another file like `episode-001_43e4489f.mp3` (or with a timestamp prefix) is already present in `Podcast Name 1/`, any new URL that hashes to `43e4489f` will be skipped as a duplicate, regardless of the differing base name or timestamp.
 
 **Note**: Temporary content and MP3 links files are automatically cleaned up after successful downloads.
 
@@ -128,8 +132,8 @@ Note: If another file like `episode-001_43e4489f.mp3` is already present in `Pod
 
 The script automatically prevents downloading duplicate files and maintains clean directories by:
 - **URL-based hashing**: Each MP3 URL generates a unique MD5 hash (first 8 chars used)
-- **Clean filenames**: Files are named as: `{base_name}_{hash}.mp3`
-- **Subfolder hash matching**: Before download, the current feed’s subfolder is scanned; if any existing `.mp3` filename contains the same hash, the download is skipped as a duplicate (filename equality not required)
+- **Timestamped, clean filenames**: Files are named as: `{YYYY-MM-DD-HHMMSSSSSS}_{base_name}_{hash}.mp3`
+- **Subfolder hash matching**: Before download, the current feed’s subfolder is scanned; if any existing `.mp3` filename contains the same hash, the download is skipped as a duplicate (filename equality not required, timestamp ignored)
 - **Memory tracking**: Stores current filenames during download process for summary and cleanup
 - **Automatic cleanup**: Removes old MP3 files not in current download set
 - **Keep only recent**: Maintains clean directories with latest episodes only
@@ -142,7 +146,7 @@ The script automatically prevents downloading duplicate files and maintains clea
 The script uses multiple methods to find MP3 links:
 - Parses content elements (`<a>`, `<audio>`, `<source>` tags for HTML)
 - Uses regex patterns to find direct MP3 URLs
-- Maintains order of appearance in the original content
+- Extracts in order of appearance, but downloads are initiated in reverse order per page (last-found first)
 - Supports configurable limits on number of links extracted
 
 ### File Management 📁
@@ -270,12 +274,14 @@ For debugging, you can modify the script to add more verbose logging or run with
 - **2.0.0** - Major update with hash-based duplicate detection, emoji-enhanced output, and simplified configuration
 - **0.1.0** - Initial release with basic download and extraction functionality
 
-## What's New in 2.0.0
+## What's New in 2.1.0
 
-- 🔐 **Hash-based duplicate detection** - Skips downloads when the URL hash is already present in any existing filename within the same subfolder
-- 🎨 **Rich emoji output** - Enhanced console experience with meaningful visual indicators
-- ⏳ **Single-line progress** - Clean progress display that updates in place
-- 🧹 **Automatic cleanup** - Always removes temporary files when MP3 downloading is enabled
-- 📁 **Smart filename generation** - Uses URL hashes for unique, consistent filenames
-- ⚡ **No configuration needed** - Duplicate detection works out of the box
-- 🎯 **Simplified setup** - Removed complex database configuration options
+- ⏮️ **Reversed MP3 download order per page** — last-found link is downloaded first
+- 🕒 **Timestamped filenames** — prefixes each MP3 with `YYYY-MM-DD-HHMMSSSSSS` (microseconds)
+- 🔐 **Hash-based duplicate detection** — unchanged behavior, works with timestamped names
+- 🎨 **Rich emoji output** — enhanced console experience with meaningful visual indicators
+- ⏳ **Single-line progress** — clean progress display that updates in place
+- 🧹 **Automatic cleanup** — always removes temporary files when MP3 downloading is enabled
+- 📁 **Smart filename generation** — uses URL hashes for unique, consistent filenames
+- ⚡ **No configuration needed** — duplicate detection works out of the box
+- 🎯 **Simplified setup** — removed complex database configuration options
