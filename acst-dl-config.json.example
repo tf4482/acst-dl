@@ -5,5 +5,9 @@
   "timeout": 30,
   "max_mp3_links": 5,
   "download_mp3_files": true,
-  "verify_ssl": true
+  "verify_ssl": true,
+  "scheduler": {
+    "enabled": false,
+    "interval_minutes": 60
+  }
 }

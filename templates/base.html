@@ -173,6 +173,8 @@
                 updateConfigDisplay(data.config);
             } else if (data.type === 'sessions_update') {
                 updateSessionsDisplay(data.sessions);
+            } else if (data.type === 'scheduler_update') {
+                updateSchedulerDisplay(data.scheduler);
             }
         }
 
@@ -205,6 +207,13 @@
             // This will be implemented in individual pages
             if (typeof handleSessionsUpdate === 'function') {
                 handleSessionsUpdate(sessions);
+            }
+        }
+
+        function updateSchedulerDisplay(scheduler) {
+            // This will be implemented in individual pages
+            if (typeof handleSchedulerUpdate === 'function') {
+                handleSchedulerUpdate(scheduler);
             }
         }
 
