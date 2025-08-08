@@ -60,7 +60,7 @@ if not os.path.exists(static_dir):
     os.makedirs(os.path.join(static_dir, 'js'), exist_ok=True)
 
 # Static files and templates
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.mount("./static", StaticFiles(directory=static_dir), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # Global state for managing downloads
