@@ -345,7 +345,6 @@ ACST-DL is automatically built and published to GitHub Container Registry with e
 - **Multi-architecture support** (AMD64 and ARM64)
 - **Automatic security scanning**
 - **Signed container images** with cosign
-- **Version tags** for stable deployments
 
 #### Quick Start with GHCR
 
@@ -428,7 +427,6 @@ You can customize the deployment using environment variables:
 
 ```yaml
 # docker-compose.override.yml
-version: '3.8'
 services:
   acst-dl:
     environment:
