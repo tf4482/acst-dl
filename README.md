@@ -10,6 +10,7 @@ A Python script specifically designed for downloading MP3 files from podcast fee
 - 📥 Extract MP3 links from podcast feeds (HTML pages, RSS feeds, etc.)
 - 💾 Download MP3 audio files with progress tracking
 - 📁 Organize downloads into named subdirectories
+- 🏷️ **Automatic MP3 tagging** (sets Album tag to folder name)
 - 🔐 **Hash-based duplicate detection** (prevents re-downloading same files)
 - 🧹 **Automatic cleanup of old files** (keeps only the most recent episodes)
 - ⚡ Configurable download limits and timeouts
@@ -48,7 +49,7 @@ git clone <repository-url>
 cd acst-dl
 
 # Install dependencies
-pip install requests beautifulsoup4
+pip install requests beautifulsoup4 mutagen
 ```
 
 ## Configuration
@@ -106,6 +107,7 @@ The script will:
 3. Download content from each configured URL (HTML pages, RSS feeds, etc.)
 4. Extract MP3 links from the downloaded content
 5. **Download the MP3 audio files** (primary function when `download_mp3_files` is `true`)
+6. **Automatically tag MP3 files** with Album name set to the folder name
 
 ### Output Structure
 
@@ -121,12 +123,23 @@ output_directory/
 
 - Filenames are prefixed with a high-resolution timestamp in the format `YYYY-MM-DD-HHMMSSSSSS` (microseconds).
 - MP3 downloads per page are initiated in reverse order of appearance (last-found first).
+- **Each MP3 file is automatically tagged with Album = folder name** (e.g., "Podcast Name 1").
 
 Note: If another file like `episode-001_43e4489f.mp3` (or with a timestamp prefix) is already present in `Podcast Name 1/`, any new URL that hashes to `43e4489f` will be skipped as a duplicate, regardless of the differing base name or timestamp.
 
 **Note**: Temporary content and MP3 links files are automatically cleaned up after successful downloads.
 
 ## Features in Detail
+
+### Automatic MP3 Tagging 🏷️
+
+The script automatically updates MP3 metadata tags after downloading:
+- **Album tag**: Set to the folder name where the MP3 is downloaded (e.g., "Podcast Name 1")
+- **ID3 tag support**: Uses the mutagen library for robust MP3 tag handling
+- **Automatic tag creation**: Adds ID3 tags to files that don't have them
+- **Error handling**: Graceful handling of tagging errors with detailed logging
+- **Non-intrusive**: Tagging failures don't affect the download process
+- **Debug logging**: Shows tagging progress and results for each file
 
 ### Hash-Based Duplicate Detection & Automatic Cleanup 🔐
 
@@ -170,6 +183,7 @@ The script uses multiple methods to find MP3 links:
 
 - [`requests`](https://pypi.org/project/requests/) - HTTP library for downloading content
 - [`beautifulsoup4`](https://pypi.org/project/beautifulsoup4/) - HTML parsing library
+- [`mutagen`](https://pypi.org/project/mutagen/) - MP3 metadata and tagging library
 - [`pyinstaller`](https://pypi.org/project/pyinstaller/) - For creating standalone executables
 
 ## Examples
@@ -259,29 +273,9 @@ The script provides rich emoji-enhanced output including:
 - 🚀 Startup and configuration loading
 - 📋 Processing status with progress indicators
 - 🎵 MP3 extraction and download status
+- 🏷️ MP3 tagging progress and results
 - ⏭ Duplicate detection notifications
 - 🗑️ Old file cleanup notifications
 - ✅ Success confirmations
 - ❌ Error messages with clear indicators
 - 📊 Detailed summary statistics with cleanup counts
-
-### Debug Mode
-
-For debugging, you can modify the script to add more verbose logging or run with Python's `-v` flag for detailed output.
-
-## Version History
-
-- **2.0.0** - Major update with hash-based duplicate detection, emoji-enhanced output, and simplified configuration
-- **0.1.0** - Initial release with basic download and extraction functionality
-
-## What's New in 2.1.0
-
-- ⏮️ **Reversed MP3 download order per page** — last-found link is downloaded first
-- 🕒 **Timestamped filenames** — prefixes each MP3 with `YYYY-MM-DD-HHMMSSSSSS` (microseconds)
-- 🔐 **Hash-based duplicate detection** — unchanged behavior, works with timestamped names
-- 🎨 **Rich emoji output** — enhanced console experience with meaningful visual indicators
-- ⏳ **Single-line progress** — clean progress display that updates in place
-- 🧹 **Automatic cleanup** — always removes temporary files when MP3 downloading is enabled
-- 📁 **Smart filename generation** — uses URL hashes for unique, consistent filenames
-- ⚡ **No configuration needed** — duplicate detection works out of the box
-- 🎯 **Simplified setup** — removed complex database configuration options

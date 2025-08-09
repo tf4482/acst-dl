@@ -19,6 +19,8 @@ import hashlib
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 import warnings
 import urllib3
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3, TALB
 
 
 def load_config(config_file="acst-dl-config.json"):
@@ -56,6 +58,32 @@ def load_config(config_file="acst-dl-config.json"):
 def create_output_directory(output_dir):
     """Create output directory if it doesn't exist."""
     Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+
+def update_mp3_tags(filepath, album_name):
+    """Update MP3 tags, specifically setting the Album tag to the folder name."""
+    try:
+        print(f"    🏷️ Updating MP3 tags: Album = '{album_name}'")
+
+        # Load the MP3 file
+        audio_file = MP3(filepath, ID3=ID3)
+
+        # Add ID3 tag if it doesn't exist
+        if audio_file.tags is None:
+            audio_file.add_tags()
+            print(f"    🏷️ Added new ID3 tags to file")
+
+        # Set the Album tag (TALB)
+        audio_file.tags.add(TALB(encoding=3, text=album_name))
+
+        # Save the changes
+        audio_file.save()
+        print(f"    ✅ Successfully updated Album tag to '{album_name}'")
+        return True
+
+    except Exception as e:
+        print(f"    ❌ Error updating MP3 tags: {e}")
+        return False
 
 
 def generate_filename(url):
@@ -288,11 +316,23 @@ def download_mp3_file(mp3_url, output_dir, timeout=30, verify_ssl=True):
         size_mb = file_size / (1024 * 1024)
         print(f"    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
 
+        # DEBUG: Log folder structure for MP3 tagging validation
+        folder_name = os.path.basename(output_dir)
+        print(
+            f"    🏷️ DEBUG: MP3 downloaded to folder '{folder_name}' (potential Album tag)"
+        )
+        print(f"    🏷️ DEBUG: Full file path: {filepath}")
+
+        # Update MP3 tags with Album name
+        folder_name = os.path.basename(output_dir)
+        tag_success = update_mp3_tags(filepath, folder_name)
+
         return {
             "success": True,
             "filename": filename,
             "size": file_size,
             "duplicate": False,
+            "tags_updated": tag_success,
         }
 
     except requests.exceptions.RequestException as e:
