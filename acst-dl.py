@@ -215,7 +215,9 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
         return None
 
 
-def download_mp3_file(mp3_url, output_dir, timeout=30, verify_ssl=True):
+def download_mp3_file(
+    mp3_url, output_dir, timeout=30, verify_ssl=True, album_name=None
+):
     """Download a single MP3 file with hash-based duplicate detection across any local filename."""
     try:
         # Extract base filename from URL
@@ -317,8 +319,7 @@ def download_mp3_file(mp3_url, output_dir, timeout=30, verify_ssl=True):
         print(f"    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
 
         # Update MP3 tags with Album name
-        folder_name = os.path.basename(output_dir)
-        tag_success = update_mp3_tags(filepath, folder_name)
+        tag_success = update_mp3_tags(filepath, album_name)
 
         return {
             "success": True,
@@ -446,7 +447,9 @@ def cleanup_old_mp3_files(output_dir, current_filenames):
         return 0
 
 
-def download_mp3_files(mp3_links, output_dir, timeout=30, verify_ssl=True):
+def download_mp3_files(
+    mp3_links, output_dir, timeout=30, verify_ssl=True, album_name=None
+):
     """Download all MP3 files from the provided links with hash-based filename duplicate detection."""
     if not mp3_links:
         return {"total": 0, "successful": 0, "failed": 0, "skipped": 0, "duplicates": 0}
@@ -468,6 +471,7 @@ def download_mp3_files(mp3_links, output_dir, timeout=30, verify_ssl=True):
             output_dir,
             timeout,
             verify_ssl,
+            album_name,
         )
 
         if result["success"]:
@@ -523,6 +527,7 @@ def download_html(
     url_name=None,
     download_mp3s=False,
     verify_ssl=True,
+    album_name=None,
 ):
     """Download content from URL and save to file, then extract MP3 links."""
     try:
@@ -574,6 +579,7 @@ def download_html(
                     output_dir,
                     timeout,
                     verify_ssl,
+                    album_name,
                 )
 
             # Always clean up content and MP3 links files when MP3 downloading is enabled
@@ -712,6 +718,7 @@ def main():
             url_name,
             download_mp3s,
             verify_ssl,
+            url_name,  # Pass url_name as album_name
         )
 
         if isinstance(result, dict) and result.get("success"):
