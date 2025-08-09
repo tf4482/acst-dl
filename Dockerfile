@@ -44,6 +44,12 @@ COPY . .
 # Create podcasts directory with proper permissions
 RUN mkdir -p /app/podcasts && chmod 755 /app/podcasts
 
+RUN mkdir -p /app/static && chmod 755 /app/static
+
+RUN mkdir -p /app/static/css && chmod 755 /app/static/css
+
+RUN mkdir -p /app/static/js && chmod 755 /app/static/js
+
 # Create non-root user for security
 RUN adduser -D -u 1000 appuser \
     && chown -R appuser:appuser /app
