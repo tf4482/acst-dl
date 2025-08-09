@@ -1,3 +1,7 @@
+# Disclaimer:
+# HIGHLY EXPERIMENTAL
+# It is meant for personal use and testing purposes only.
+
 # A Podcast MP3 Downloader (acst-dl)
 
 A Python script with a modern web interface for downloading MP3 files from podcast feeds. This tool extracts MP3 links from podcast feeds (HTML pages, RSS feeds, etc.) and downloads the audio files with intelligent duplicate detection and automatic organization.
@@ -341,7 +345,6 @@ ACST-DL is automatically built and published to GitHub Container Registry with e
 - **Multi-architecture support** (AMD64 and ARM64)
 - **Automatic security scanning**
 - **Signed container images** with cosign
-- **Version tags** for stable deployments
 
 #### Quick Start with GHCR
 
@@ -424,7 +427,6 @@ You can customize the deployment using environment variables:
 
 ```yaml
 # docker-compose.override.yml
-version: '3.8'
 services:
   acst-dl:
     environment:
@@ -518,25 +520,6 @@ pyinstaller --onefile acst-dl.py
 
 **WebSocket connection issues**: Check browser console for connection errors and ensure no firewall is blocking the connection.
 
-### Console Output
-
-The script provides rich emoji-enhanced output including:
-- 🚀 Startup and configuration loading
-- 📋 Processing status with session tracking
-- 🎵 MP3 extraction and download status
-- ⏭ Duplicate detection notifications
-- 🗑️ Old file cleanup notifications
-- ✅ Success confirmations
-- ❌ Error messages with clear indicators
-- 📊 Detailed summary statistics
-
-### Web Interface Debugging
-
-- Check browser developer tools for JavaScript errors
-- Monitor WebSocket connection status in the Network tab
-- Review server logs for backend errors
-- Ensure all dependencies are properly installed
-
 ## License
 
 This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) file for details.
@@ -548,13 +531,6 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 3. Make your changes
 4. Add tests if applicable
 5. Submit a pull request
-
-## Version History
-
-- **3.0.0** - Major update with complete web interface, real-time updates, and enhanced file management
-- **2.1.0** - Added reversed download order, timestamped filenames, and enhanced console output
-- **2.0.0** - Major update with hash-based duplicate detection and simplified configuration
-- **0.1.0** - Initial release with basic download and extraction functionality
 
 ## Automatic Download Scheduler
 
