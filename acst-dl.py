@@ -316,13 +316,6 @@ def download_mp3_file(mp3_url, output_dir, timeout=30, verify_ssl=True):
         size_mb = file_size / (1024 * 1024)
         print(f"    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
 
-        # DEBUG: Log folder structure for MP3 tagging validation
-        folder_name = os.path.basename(output_dir)
-        print(
-            f"    🏷️ DEBUG: MP3 downloaded to folder '{folder_name}' (potential Album tag)"
-        )
-        print(f"    🏷️ DEBUG: Full file path: {filepath}")
-
         # Update MP3 tags with Album name
         folder_name = os.path.basename(output_dir)
         tag_success = update_mp3_tags(filepath, folder_name)
