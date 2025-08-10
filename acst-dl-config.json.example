@@ -5,6 +5,7 @@
   "timeout": 30,
   "max_mp3_links": 5,
   "download_mp3_files": true,
+  "enable_album_tagging": true,
   "verify_ssl": true,
   "scheduler": {
     "enabled": false,

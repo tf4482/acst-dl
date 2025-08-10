@@ -216,7 +216,12 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
 
 
 def download_mp3_file(
-    mp3_url, output_dir, timeout=30, verify_ssl=True, album_name=None
+    mp3_url,
+    output_dir,
+    timeout=30,
+    verify_ssl=True,
+    album_name=None,
+    enable_album_tagging=True,
 ):
     """Download a single MP3 file with hash-based duplicate detection across any local filename."""
     try:
@@ -318,8 +323,14 @@ def download_mp3_file(
         size_mb = file_size / (1024 * 1024)
         print(f"    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
 
-        # Update MP3 tags with Album name
-        tag_success = update_mp3_tags(filepath, album_name)
+        # Update MP3 tags with Album name (if enabled)
+        tag_success = False
+        if enable_album_tagging and album_name:
+            tag_success = update_mp3_tags(filepath, album_name)
+        elif not enable_album_tagging:
+            print(f"    🏷️ Album tagging disabled - skipping tag update")
+        else:
+            print(f"    🏷️ No album name provided - skipping tag update")
 
         return {
             "success": True,
@@ -448,7 +459,12 @@ def cleanup_old_mp3_files(output_dir, current_filenames):
 
 
 def download_mp3_files(
-    mp3_links, output_dir, timeout=30, verify_ssl=True, album_name=None
+    mp3_links,
+    output_dir,
+    timeout=30,
+    verify_ssl=True,
+    album_name=None,
+    enable_album_tagging=True,
 ):
     """Download all MP3 files from the provided links with hash-based filename duplicate detection."""
     if not mp3_links:
@@ -472,6 +488,7 @@ def download_mp3_files(
             timeout,
             verify_ssl,
             album_name,
+            enable_album_tagging,
         )
 
         if result["success"]:
@@ -528,6 +545,7 @@ def download_html(
     download_mp3s=False,
     verify_ssl=True,
     album_name=None,
+    enable_album_tagging=True,
 ):
     """Download content from URL and save to file, then extract MP3 links."""
     try:
@@ -580,6 +598,7 @@ def download_html(
                     timeout,
                     verify_ssl,
                     album_name,
+                    enable_album_tagging,
                 )
 
             # Always clean up content and MP3 links files when MP3 downloading is enabled
@@ -653,6 +672,7 @@ def main():
     max_mp3_links = config.get("max_mp3_links", None)
     download_mp3s = config.get("download_mp3_files", False)
     verify_ssl = config.get("verify_ssl", True)
+    enable_album_tagging = config.get("enable_album_tagging", True)
 
     # Hash-based duplicate detection is always enabled
     enable_hash_detection = True
@@ -685,6 +705,8 @@ def main():
     if download_mp3s:
         print(f"🎵 MP3 file downloading: ENABLED")
         print(f"🔐 Hash-based filename duplicate detection: ENABLED")
+        album_status = "ENABLED" if enable_album_tagging else "DISABLED"
+        print(f"🏷️ Album tagging: {album_status}")
         ssl_status = (
             "ENABLED"
             if verify_ssl
@@ -719,6 +741,7 @@ def main():
             download_mp3s,
             verify_ssl,
             url_name,  # Pass url_name as album_name
+            enable_album_tagging,
         )
 
         if isinstance(result, dict) and result.get("success"):
