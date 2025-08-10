@@ -10,8 +10,9 @@ A Python script specifically designed for downloading MP3 files from podcast fee
 - 📥 Extract MP3 links from podcast feeds (HTML pages, RSS feeds, etc.)
 - 💾 Download MP3 audio files with progress tracking
 - 📁 Organize downloads into named subdirectories
-- 🏷️ **Automatic MP3 tagging** (sets Album tag to folder name)
-- 🔐 **Hash-based duplicate detection** (prevents re-downloading same files)
+- 🏷️ **Automatic MP3 tagging** (sets Album tag to folder name and Track numbers from .txt file)
+- 🔢 **Track number tagging** (assigns sequential track numbers based on .txt file order)
+- � **Hash-based duplicate detection** (prevents re-downloading same files)
 - 🧹 **Automatic cleanup of old files** (keeps only the most recent episodes)
 - ⚡ Configurable download limits and timeouts
 - 🗑️ Automatic cleanup of temporary files
@@ -114,16 +115,17 @@ The script will:
 ```
 output_directory/
 ├── Podcast Name 1/
-│   └── 2025-08-07-023015123456_media_43e4489f.mp3   (timestamp prefix + URL hash)
-│   └── 2025-08-07-023020654321_episodeA_7ac9803d.mp3
+│   └── 2025-08-07-023015123456_media_43e4489f.mp3   (timestamp prefix + URL hash, Album: "Podcast Name 1", Track: 1)
+│   └── 2025-08-07-023020654321_episodeA_7ac9803d.mp3 (Album: "Podcast Name 1", Track: 2)
 └── Podcast Name 2/
-    └── 2025-08-07-030001000111_audio_20830c0e.mp3
-    └── 2025-08-07-030501222333_ep-12_32758bac.mp3
+    └── 2025-08-07-030001000111_audio_20830c0e.mp3    (Album: "Podcast Name 2", Track: 1)
+    └── 2025-08-07-030501222333_ep-12_32758bac.mp3    (Album: "Podcast Name 2", Track: 2)
 ```
 
 - Filenames are prefixed with a high-resolution timestamp in the format `YYYY-MM-DD-HHMMSSSSSS` (microseconds).
 - MP3 downloads per page are initiated in reverse order of appearance (last-found first).
-- **Each MP3 file is automatically tagged with Album = folder name** (e.g., "Podcast Name 1").
+- **Each MP3 file is automatically tagged with Album = folder name and Track number** based on the order in the generated .txt file.
+- **Track numbers are applied to both new downloads and existing files** when the script runs.
 
 Note: If another file like `episode-001_43e4489f.mp3` (or with a timestamp prefix) is already present in `Podcast Name 1/`, any new URL that hashes to `43e4489f` will be skipped as a duplicate, regardless of the differing base name or timestamp.
 
@@ -135,11 +137,38 @@ Note: If another file like `episode-001_43e4489f.mp3` (or with a timestamp prefi
 
 The script automatically updates MP3 metadata tags after downloading:
 - **Album tag**: Set to the folder name where the MP3 is downloaded (e.g., "Podcast Name 1")
+- **Track number tag**: Automatically set based on the numbering in the generated .txt file (1, 2, 3, etc.)
 - **ID3 tag support**: Uses the mutagen library for robust MP3 tag handling
 - **Automatic tag creation**: Adds ID3 tags to files that don't have them
+- **Existing file support**: Updates tags for both new downloads and previously downloaded files
 - **Error handling**: Graceful handling of tagging errors with detailed logging
 - **Non-intrusive**: Tagging failures don't affect the download process
 - **Debug logging**: Shows tagging progress and results for each file
+
+### Track Number Tagging 🔢
+
+The script automatically assigns track numbers to MP3 files based on their order in the generated .txt file:
+
+- **Automatic numbering**: Track numbers are assigned sequentially (1, 2, 3, etc.) based on the order MP3 links appear in the .txt file
+- **ID3 TRCK tag**: Uses the standard ID3 track number tag (TRCK) for maximum compatibility
+- **New and existing files**: Track numbers are applied to both newly downloaded files and previously downloaded files when the script runs
+- **Consistent ordering**: Track numbers correspond exactly to the numbering in the generated MP3 links .txt file
+- **Album integration**: Track numbers work seamlessly with the existing Album tagging feature
+- **Error resilience**: Track numbering failures don't affect the download process
+- **Debug output**: Shows track number assignment progress for each file
+
+Example output:
+```
+[1/3] https://example.com/episode1.mp3 (Track 1)
+    🏷️ Updating MP3 tags: Album = 'Podcast Name', Track = 1
+    ✅ Successfully updated Album tag to 'Podcast Name' and Track number to 1
+
+[2/3] https://example.com/episode2.mp3 (Track 2)
+    ⏭ Skipping download (duplicate by hash abc123) -> existing_file.mp3
+    🏷️ Updating tags for existing file...
+    🏷️ Updating MP3 tags: Album = 'Podcast Name', Track = 2
+    ✅ Successfully updated Album tag to 'Podcast Name' and Track number to 2
+```
 
 ### Hash-Based Duplicate Detection & Automatic Cleanup 🔐
 
