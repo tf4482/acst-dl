@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 import warnings
 import urllib3
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TALB
+from mutagen.id3 import ID3, TALB, TRCK
 
 
 def load_config(config_file="acst-dl-config.json"):
@@ -60,10 +60,13 @@ def create_output_directory(output_dir):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
 
-def update_mp3_tags(filepath, album_name):
-    """Update MP3 tags, specifically setting the Album tag to the folder name."""
+def update_mp3_tags(filepath, album_name, track_number=None):
+    """Update MP3 tags, specifically setting the Album tag to the folder name and optionally the track number."""
     try:
-        print(f"    🏷️ Updating MP3 tags: Album = '{album_name}'")
+        tag_info = f"Album = '{album_name}'"
+        if track_number is not None:
+            tag_info += f", Track = {track_number}"
+        print(f"    🏷️ Updating MP3 tags: {tag_info}")
 
         # Load the MP3 file
         audio_file = MP3(filepath, ID3=ID3)
@@ -76,9 +79,16 @@ def update_mp3_tags(filepath, album_name):
         # Set the Album tag (TALB)
         audio_file.tags.add(TALB(encoding=3, text=album_name))
 
+        # Set the Track number tag (TRCK) if provided
+        if track_number is not None:
+            audio_file.tags.add(TRCK(encoding=3, text=str(track_number)))
+
         # Save the changes
         audio_file.save()
-        print(f"    ✅ Successfully updated Album tag to '{album_name}'")
+        success_msg = f"Successfully updated Album tag to '{album_name}'"
+        if track_number is not None:
+            success_msg += f" and Track number to {track_number}"
+        print(f"    ✅ {success_msg}")
         return True
 
     except Exception as e:
@@ -215,6 +225,37 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
         return None
 
 
+def parse_track_numbers_from_txt(txt_filepath):
+    """Parse track numbers from MP3 links text file and return a mapping of URL to track number."""
+    track_mapping = {}
+
+    try:
+        if not os.path.exists(txt_filepath):
+            return track_mapping
+
+        with open(txt_filepath, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        # Look for numbered lines in format "1. http://..." or "1) http://..."
+        for line in lines:
+            line = line.strip()
+            # Match patterns like "1. http://..." or "1) http://..."
+            match = re.match(r"^(\d+)[\.\)]\s+(.+)$", line)
+            if match:
+                track_number = int(match.group(1))
+                url = match.group(2).strip()
+                track_mapping[url] = track_number
+
+        print(
+            f"    📋 Parsed {len(track_mapping)} track numbers from {os.path.basename(txt_filepath)}"
+        )
+        return track_mapping
+
+    except Exception as e:
+        print(f"    ❌ Error parsing track numbers from {txt_filepath}: {e}")
+        return track_mapping
+
+
 def download_mp3_file(
     mp3_url,
     output_dir,
@@ -222,6 +263,7 @@ def download_mp3_file(
     verify_ssl=True,
     album_name=None,
     enable_album_tagging=True,
+    track_number=None,
 ):
     """Download a single MP3 file with hash-based duplicate detection across any local filename."""
     try:
@@ -260,13 +302,24 @@ def download_mp3_file(
             for existing in os.listdir(output_dir):
                 if existing.lower().endswith(".mp3") and url_hash in existing:
                     print(
-                        f"    ⏭ Skipping (duplicate by hash {url_hash}) -> {existing}"
+                        f"    ⏭ Skipping download (duplicate by hash {url_hash}) -> {existing}"
                     )
+
+                    # Update tags for existing file if album tagging is enabled
+                    existing_filepath = os.path.join(output_dir, existing)
+                    tag_success = False
+                    if enable_album_tagging and album_name:
+                        print(f"    🏷️ Updating tags for existing file...")
+                        tag_success = update_mp3_tags(
+                            existing_filepath, album_name, track_number
+                        )
+
                     return {
                         "success": True,
                         "filename": existing,  # return the existing file name we matched
                         "skipped": True,
                         "duplicate": True,
+                        "tags_updated": tag_success,
                     }
         except FileNotFoundError:
             # Directory may not exist yet; will be created by caller
@@ -323,10 +376,10 @@ def download_mp3_file(
         size_mb = file_size / (1024 * 1024)
         print(f"    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
 
-        # Update MP3 tags with Album name (if enabled)
+        # Update MP3 tags with Album name and track number (if enabled)
         tag_success = False
         if enable_album_tagging and album_name:
-            tag_success = update_mp3_tags(filepath, album_name)
+            tag_success = update_mp3_tags(filepath, album_name, track_number)
         elif not enable_album_tagging:
             print(f"    🏷️ Album tagging disabled - skipping tag update")
         else:
@@ -465,6 +518,7 @@ def download_mp3_files(
     verify_ssl=True,
     album_name=None,
     enable_album_tagging=True,
+    track_mapping=None,
 ):
     """Download all MP3 files from the provided links with hash-based filename duplicate detection."""
     if not mp3_links:
@@ -481,7 +535,11 @@ def download_mp3_files(
     current_filenames = set()  # Track all current hash-based filenames
 
     for i, mp3_url in enumerate(mp3_links, 1):
-        print(f"  [{i}/{len(mp3_links)}] {mp3_url}")
+        # Get track number from mapping if available
+        track_number = track_mapping.get(mp3_url) if track_mapping else None
+        track_info = f" (Track {track_number})" if track_number else ""
+        print(f"  [{i}/{len(mp3_links)}] {mp3_url}{track_info}")
+
         result = download_mp3_file(
             mp3_url,
             output_dir,
@@ -489,6 +547,7 @@ def download_mp3_files(
             verify_ssl,
             album_name,
             enable_album_tagging,
+            track_number,
         )
 
         if result["success"]:
@@ -592,6 +651,12 @@ def download_html(
 
             # Download MP3 files if enabled
             if download_mp3s:
+                # Parse track numbers from the links file if it exists
+                track_mapping = {}
+                if links_filename:
+                    links_filepath = os.path.join(output_dir, links_filename)
+                    track_mapping = parse_track_numbers_from_txt(links_filepath)
+
                 mp3_download_stats = download_mp3_files(
                     mp3_links,
                     output_dir,
@@ -599,6 +664,7 @@ def download_html(
                     verify_ssl,
                     album_name,
                     enable_album_tagging,
+                    track_mapping,
                 )
 
             # Always clean up content and MP3 links files when MP3 downloading is enabled
