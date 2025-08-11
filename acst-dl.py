@@ -60,6 +60,51 @@ def create_output_directory(output_dir):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
 
+def compare_tag_values(current_tags, new_album, new_track=None, new_release_date=None):
+    """Compare current tag values with new values to determine if update is needed."""
+    changes_needed = False
+    changes = []
+
+    # Check Album tag (TALB)
+    current_album = None
+    if current_tags and "TALB" in current_tags:
+        current_album = (
+            str(current_tags["TALB"].text[0]) if current_tags["TALB"].text else None
+        )
+
+    if current_album != new_album:
+        changes_needed = True
+        changes.append(f"Album: '{current_album}' → '{new_album}'")
+
+    # Check Track tag (TRCK)
+    if new_track is not None:
+        current_track = None
+        if current_tags and "TRCK" in current_tags:
+            current_track = (
+                str(current_tags["TRCK"].text[0]) if current_tags["TRCK"].text else None
+            )
+
+        if current_track != str(new_track):
+            changes_needed = True
+            changes.append(f"Track: '{current_track}' → '{new_track}'")
+
+    # Check Release Date tag (TDRC)
+    if new_release_date is not None:
+        current_release_date = None
+        if current_tags and "TDRC" in current_tags:
+            current_release_date = (
+                str(current_tags["TDRC"].text[0]) if current_tags["TDRC"].text else None
+            )
+
+        if current_release_date != new_release_date:
+            changes_needed = True
+            changes.append(
+                f"Release Date: '{current_release_date}' → '{new_release_date}'"
+            )
+
+    return changes_needed, changes
+
+
 def update_mp3_tags(
     filepath,
     album_name,
@@ -93,7 +138,7 @@ def update_mp3_tags(
         if disabled_tags:
             tag_info += f" ({', '.join(disabled_tags)} tagging disabled)"
 
-        print(f"    🏷️ Updating MP3 tags: {tag_info}")
+        print(f"    🏷️ Checking MP3 tags: {tag_info}")
 
         # Load the MP3 file
         audio_file = MP3(filepath, ID3=ID3)
@@ -102,6 +147,22 @@ def update_mp3_tags(
         if audio_file.tags is None:
             audio_file.add_tags()
             print(f"    🏷️ Added new ID3 tags to file")
+
+        # Determine which values we want to set
+        new_track = track_number if enable_track_tagging else None
+        new_release_date = release_date if enable_release_date_tagging else None
+
+        # Compare current tags with new values
+        changes_needed, changes = compare_tag_values(
+            audio_file.tags, album_name, new_track, new_release_date
+        )
+
+        if not changes_needed:
+            print(f"    ⏭️ MP3 tags already up-to-date - skipping write operation")
+            return True
+
+        # Log what changes will be made
+        print(f"    🔄 Tag changes needed: {', '.join(changes)}")
 
         # Set the Album tag (TALB) - always overwrite existing
         audio_file.tags.delall("TALB")
