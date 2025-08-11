@@ -63,15 +63,18 @@ def create_output_directory(output_dir):
 def update_mp3_tags(filepath, album_name, track_number=None):
     """Update MP3 tags, specifically setting the Album tag to the folder name and optionally the track number."""
     try:
-        tag_info = f"Album = '{album_name}'"
+        # Calculate release date once if track_number is provided
+        release_date = None
         if track_number is not None:
-            tag_info += f", Track = {track_number}"
-            # Create release date: YYYY-MM-XX where YYYY is current year, MM is current month, XX is track number
             current_time = time.localtime()
             release_date = (
                 f"{current_time.tm_year}-{current_time.tm_mon:02d}-{track_number:02d}"
             )
-            tag_info += f", Release Date = {release_date}"
+
+        # Build tag info for display
+        tag_info = f"Album = '{album_name}'"
+        if track_number is not None:
+            tag_info += f", Track = {track_number}, Release Date = {release_date}"
         print(f"    🏷️ Updating MP3 tags: {tag_info}")
 
         # Load the MP3 file
@@ -92,11 +95,6 @@ def update_mp3_tags(filepath, album_name, track_number=None):
             audio_file.tags.add(TRCK(encoding=3, text=str(track_number)))
 
             # Set the Release Date tag (TDRC) - always overwrite existing
-            # Format: YYYY-MM-XX where YYYY is current year, MM is current month, XX is track number (zero-padded)
-            current_time = time.localtime()
-            release_date = (
-                f"{current_time.tm_year}-{current_time.tm_mon:02d}-{track_number:02d}"
-            )
             audio_file.tags.delall("TDRC")
             audio_file.tags.add(TDRC(encoding=3, text=release_date))
 
@@ -104,10 +102,6 @@ def update_mp3_tags(filepath, album_name, track_number=None):
         audio_file.save()
         success_msg = f"Successfully updated Album tag to '{album_name}'"
         if track_number is not None:
-            current_time = time.localtime()
-            release_date = (
-                f"{current_time.tm_year}-{current_time.tm_mon:02d}-{track_number:02d}"
-            )
             success_msg += (
                 f", Track number to {track_number}, and Release Date to {release_date}"
             )
@@ -764,7 +758,6 @@ def main():
     enable_album_tagging = config.get("enable_album_tagging", True)
 
     # Hash-based duplicate detection is always enabled
-    enable_hash_detection = True
 
     # Handle absolute and relative paths for output directory
     output_dir = os.path.abspath(os.path.expanduser(output_dir_config))
