@@ -1,28 +1,18 @@
-# A Podcast MP3 Downloader (acst-dl)
+# ACST-DL - Advanced Content Stream Tool Downloader
 
-A Python script specifically designed for downloading MP3 files from podcast feeds. This tool extracts MP3 links from podcast feeds (HTML pages, RSS feeds, etc.) and downloads the audio files with intelligent duplicate detection and automatic organization.
+A powerful Python-based podcast and audio content downloader with intelligent duplicate detection and advanced MP3 tagging capabilities.
 
-**Primary Purpose: MP3 Audio File Downloading**
+## 🎯 Core Features
 
-## Features
+- 🎵 **MP3 Download from Podcast Feeds** - Primary function of the tool
+- 🔍 **Intelligent MP3 Link Extraction** from HTML pages, RSS feeds, and XML content
+- 🔐 **Hash-based Duplicate Detection** - Prevents duplicate downloads automatically
+- 🏷️ **Advanced MP3 Metadata Tagging** with configurable options
+- 🧹 **Automatic File Management** - Cleans up old files and temporary content
+- 📊 **Detailed Progress Tracking** with emoji-enhanced console output
+- ⚡ **High-performance Downloads** with progress tracking for large files
 
-- 🎵 **Primary Focus: MP3 file downloading from podcast feeds**
-- 📥 Extract MP3 links from podcast feeds (HTML pages, RSS feeds, etc.)
-- 💾 Download MP3 audio files with progress tracking
-- 📁 Organize downloads into named subdirectories
-- 🏷️ **Automatic MP3 tagging** (sets Album tag to folder name, Track numbers, and Release dates)
-- 🔢 **Track number tagging** (assigns sequential track numbers for improved media player sorting)
-- 📅 **Release date tagging** (sets custom dates based on track numbers for chronological sorting)
-- � **Hash-based duplicate detection** (prevents re-downloading same files)
-- 🧹 **Automatic cleanup of old files** (keeps only the most recent episodes)
-- ⚡ Configurable download limits and timeouts
-- 🗑️ Automatic cleanup of temporary files
-- 📊 Detailed download statistics and progress tracking
-- 🎨 Rich emoji-enhanced console output
-- ⏳ Single-line progress indicators
-- 🔄 Support for both old list format and new dictionary format URLs
-
-## Installation
+## 🚀 Installation
 
 ### Prerequisites
 
@@ -32,70 +22,120 @@ A Python script specifically designed for downloading MP3 files from podcast fee
 ### Using Poetry (Recommended)
 
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd acst-dl
-
-# Install dependencies
 poetry install
-
-# Activate the virtual environment
 poetry shell
 ```
 
 ### Using pip
 
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd acst-dl
-
-# Install dependencies
 pip install requests beautifulsoup4 mutagen
 ```
 
-## Configuration
+## ⚙️ Configuration
 
-Create or modify the [`acst-dl-config.json.example`](acst-dl-config.json.example) file to configure your downloads:
+Create an `acst-dl-config.json` file based on the example:
 
 ```json
 {
   "urls": {
-    "Podcast Name 1": "https://feeds.acast.com/public/shows/podcast-name-1",
-    "Podcast Name 2": "https://feeds.acast.com/public/shows/podcast-name-2"
+    "Podcast Name 1": "https://feeds.example.com/podcast1",
+    "Podcast Name 2": "https://feeds.example.com/podcast2"
   },
-  "output_directory": "~/data/podcasts",
+  "output_directory": "~/Downloads/podcasts",
   "timeout": 30,
   "max_mp3_links": 5,
   "download_mp3_files": true,
+  "enable_album_tagging": false,
+  "enable_track_tagging": false,
+  "enable_release_date_tagging": false,
   "verify_ssl": true
 }
 ```
 
-**Note**: Hash-based duplicate detection is now enabled by default and requires no configuration.
+### 📋 Configuration Options
 
-### Configuration Options
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `urls` | Object/Array | **Required** | Dictionary with named URLs or array of URLs |
+| `output_directory` | String | `"downloads"` | Target directory for downloads |
+| `timeout` | Number | `30` | Request timeout in seconds |
+| `max_mp3_links` | Number | `null` | Maximum number of MP3 links per URL |
+| `download_mp3_files` | Boolean | `false` | **Main function:** Enable MP3 downloading |
+| `enable_album_tagging` | Boolean | `false` | Set album tag (folder name) |
+| `enable_track_tagging` | Boolean | `false` | Set track number tag |
+| `enable_release_date_tagging` | Boolean | `false` | Set release date tag |
+| `verify_ssl` | Boolean | `true` | SSL certificate verification |
 
-| Option               | Type         | Default       | Description                                                                      |
-| -------------------- | ------------ | ------------- | -------------------------------------------------------------------------------- |
-| `urls`               | Object/Array | Required      | Dictionary of named URLs or array of URLs to process                             |
-| `output_directory`   | String       | `"downloads"` | Directory where files will be saved                                              |
-| `timeout`            | Number       | `30`          | Request timeout in seconds                                                       |
-| `max_mp3_links`      | Number       | `null`        | Maximum number of MP3 links to extract per URL                                   |
-| `download_mp3_files` | Boolean      | `false`       | **Set to `true` for MP3 downloading (main purpose)**                             |
-| `verify_ssl`         | Boolean      | `true`        | Whether to verify SSL certificates (set to `false` for problematic certificates) |
+## 🎵 MP3 Tagging System
 
-### Hash-Based Duplicate Detection & Automatic Cleanup
+The script provides an advanced, configurable tagging system:
 
-The script now automatically prevents downloading duplicate MP3 files and keeps folders clean by:
-- 🔐 **Embedding a URL hash** (MD5, first 8 chars) into filenames (e.g., `media_43e4489f.mp3`)
-- 📁 **Scanning for the URL hash in the current subfolder** before downloading; if any `.mp3` already contains that hash in its filename, the file is skipped as a duplicate (even if the base name differs)
-- ⚡ **Skipping duplicates** automatically without any configuration needed
-- 🧹 **Automatic old file cleanup** - removes MP3 files not in current download set
-- 🗑️ **Keeps only recent files** - maintains clean directories with latest episodes
-- 🎯 **No database required** - uses simple hash-in-filename detection within the subfolder plus in-memory tracking during a run
+### 🏷️ Album Tagging
+- **ID3 Tag:** TALB (Album)
+- **Value:** Download folder name
+- **Purpose:** Organizes files by podcast name
+- **Default:** Disabled
 
-## Usage
+### 🔢 Track Number Tagging
+- **ID3 Tag:** TRCK (Track Number)
+- **Value:** Sequential numbering (1, 2, 3, ...)
+- **Purpose:** Enables proper episode ordering in media players
+- **Default:** Disabled
+
+### 📅 Release Date Tagging
+- **ID3 Tag:** TDRC (Recording Date)
+- **Format:** `YYYY-MM-DD` (Current year-month, track number as day)
+- **Example:** `2025-08-01`, `2025-08-02`, `2025-08-03`
+- **Purpose:** Chronological sorting in media players
+- **Default:** Disabled
+
+### ⚡ Tag Behavior
+- **Always Overwrite:** All tags are forcefully updated on every run
+- **Existing Files:** Tags are updated for both new downloads and existing files
+- **Error Resilient:** Tagging failures don't affect the download process
+- **Configurable:** Each tagging type can be independently enabled/disabled
+
+## 🔐 Duplicate Detection System
+
+Advanced hash-based duplicate prevention:
+
+### How It Works
+1. **URL Hashing:** Each MP3 URL generates a unique MD5 hash (8 characters)
+2. **Filename Integration:** Hash is embedded in filename: `{timestamp}_{name}_{hash}.mp3`
+3. **Smart Detection:** Scans existing files for hash matches before downloading
+4. **Cross-filename Detection:** Works regardless of original filename differences
+
+### Benefits
+- 🚫 **No Re-downloads:** Automatically skips duplicate content
+- 💾 **Storage Efficient:** Prevents duplicate files
+- 🧹 **Auto-cleanup:** Removes outdated files not in current download set
+- ⚡ **Fast Detection:** No database required, uses filename scanning
+
+## 📁 File Organization
+
+### Directory Structure
+```
+output_directory/
+├── Podcast Name 1/
+│   ├── 2025-08-11-143022123456_episode1_a1b2c3d4.mp3
+│   └── 2025-08-11-143045789012_episode2_e5f6g7h8.mp3
+└── Podcast Name 2/
+    ├── 2025-08-11-144001234567_show1_i9j0k1l2.mp3
+    └── 2025-08-11-144030567890_show2_m3n4o5p6.mp3
+```
+
+### Filename Format
+- **Timestamp:** `YYYY-MM-DD-HHMMSSSSSS` (microsecond precision)
+- **Original Name:** Extracted from URL or generated
+- **Hash:** 8-character MD5 hash of the URL
+- **Extension:** Always `.mp3`
+
+## 🎯 Usage
 
 ### Basic Usage
 
@@ -103,196 +143,162 @@ The script now automatically prevents downloading duplicate MP3 files and keeps 
 python acst-dl.py
 ```
 
-The script will:
-1. Read configuration from [`acst-dl-config.json.example`](acst-dl-config.json.example)
-2. Create output directories as needed
-3. Download content from each configured URL (HTML pages, RSS feeds, etc.)
-4. Extract MP3 links from the downloaded content
-5. **Download the MP3 audio files** (primary function when `download_mp3_files` is `true`)
-6. **Automatically tag MP3 files** with Album name set to the folder name
+### Workflow
+1. **Configuration Loading:** Reads `acst-dl-config.json`
+2. **URL Processing:** Downloads and parses each configured URL
+3. **Link Extraction:** Finds MP3 links using multiple methods:
+   - HTML element parsing (`<a>`, `<audio>`, `<source>` tags)
+   - Regex pattern matching for direct MP3 URLs
+   - Position-based ordering (downloads in reverse order)
+4. **MP3 Downloading:** Downloads files with duplicate detection
+5. **Metadata Tagging:** Applies configured ID3 tags
+6. **Cleanup:** Removes temporary files and old MP3s
 
-### Output Structure
+### Console Output Example
 
 ```
-output_directory/
-├── Podcast Name 1/
-│   └── 2025-08-07-023015123456_media_43e4489f.mp3   (timestamp prefix + URL hash, Album: "Podcast Name 1", Track: 1)
-│   └── 2025-08-07-023020654321_episodeA_7ac9803d.mp3 (Album: "Podcast Name 1", Track: 2)
-└── Podcast Name 2/
-    └── 2025-08-07-030001000111_audio_20830c0e.mp3    (Album: "Podcast Name 2", Track: 1)
-    └── 2025-08-07-030501222333_ep-12_32758bac.mp3    (Album: "Podcast Name 2", Track: 2)
-```
+🚀 Podcast Downloader Starting...
+📄 Using config file: ./acst-dl-config.json
+📁 Output directory: /home/user/Downloads/podcasts
+🎵 MP3 file downloading: ENABLED
+🔐 Hash-based filename duplicate detection: ENABLED
+🏷️ Album tagging: ENABLED
+🔢 Track number tagging: ENABLED
+📅 Release date tagging: DISABLED
 
-- Filenames are prefixed with a high-resolution timestamp in the format `YYYY-MM-DD-HHMMSSSSSS` (microseconds).
-- MP3 downloads per page are initiated in reverse order of appearance (last-found first).
-- **Each MP3 file is automatically tagged with Album = folder name, Track number, and Release date** based on the order in the generated .txt file.
-- **Track numbers and Release dates are applied to both new downloads and existing files** when the script runs.
-- **Tags are always overwritten** to ensure consistency across all files.
+📋 [1/2] Processing 'Tech Podcast': https://feeds.example.com/tech
+🌐 Downloading: https://feeds.example.com/tech
+✅ Successfully downloaded: https://feeds.example.com/tech -> tech_feed_1728123456.html
+🔍 Extracting MP3 links from tech_feed_1728123456.html (limit: 5)...
+🎵 Found 3 MP3 link(s) -> Tech_Podcast_mp3_links_1728123456.txt
+📁 Downloading 3 MP3 file(s) to /home/user/Downloads/podcasts/Tech Podcast...
+🔍 Hash-based filename duplicate detection: ENABLED
 
-Note: If another file like `episode-001_43e4489f.mp3` (or with a timestamp prefix) is already present in `Podcast Name 1/`, any new URL that hashes to `43e4489f` will be skipped as a duplicate, regardless of the differing base name or timestamp.
-
-**Note**: Temporary content and MP3 links files are automatically cleaned up after successful downloads.
-
-## Features in Detail
-
-### Automatic MP3 Tagging 🏷️
-
-The script automatically updates MP3 metadata tags after downloading to improve sortability in media players:
-- **Album tag**: Set to the folder name where the MP3 is downloaded (e.g., "Podcast Name 1")
-- **Track number tag**: Automatically set based on the numbering in the generated .txt file (1, 2, 3, etc.)
-- **Release date tag**: Set to format `YYYY-MM-XX` where YYYY is current year, MM is current month, and XX is the track number (e.g., `2025-08-01`, `2025-08-02`)
-- **Always overwrite**: All tags are forcefully updated on every run to ensure consistency
-- **Media player compatibility**: Track numbers and release dates enable proper chronological sorting in various media players
-- **ID3 tag support**: Uses the mutagen library for robust MP3 tag handling
-- **Automatic tag creation**: Adds ID3 tags to files that don't have them
-- **Existing file support**: Updates tags for both new downloads and previously downloaded files
-- **Error handling**: Graceful handling of tagging errors with detailed logging
-- **Non-intrusive**: Tagging failures don't affect the download process
-- **Debug logging**: Shows tagging progress and results for each file
-
-### Track Number and Release Date Tagging 🔢📅
-
-The script automatically assigns track numbers and release dates to MP3 files to improve sortability in media players:
-
-**Track Number Features:**
-- **Automatic numbering**: Track numbers are assigned sequentially (1, 2, 3, etc.) based on the order MP3 links appear in the .txt file
-- **ID3 TRCK tag**: Uses the standard ID3 track number tag (TRCK) for maximum compatibility
-- **Always overwrite**: Track numbers are forcefully updated on every run, even if already present
-
-**Release Date Features:**
-- **Custom date format**: Release dates are set to `YYYY-MM-XX` where YYYY is current year, MM is current month, and XX is the track number (zero-padded)
-- **ID3 TDRC tag**: Uses the standard ID3 recording date tag (TDRC) for maximum compatibility
-- **Chronological sorting**: Enables proper episode ordering in media players that sort by release date
-- **Always overwrite**: Release dates are forcefully updated on every run, even if already present
-
-**Media Player Benefits:**
-- **Improved sorting**: Both track numbers and release dates ensure episodes play in the correct order
-- **Universal compatibility**: Works with most media players that support ID3 tags
-- **Consistent experience**: Provides reliable sorting across different playback applications
-
-**General Features:**
-- **New and existing files**: Both tags are applied to newly downloaded files and previously downloaded files when the script runs
-- **Consistent ordering**: Track numbers and dates correspond exactly to the numbering in the generated MP3 links .txt file
-- **Album integration**: Works seamlessly with the existing Album tagging feature
-- **Error resilience**: Tagging failures don't affect the download process
-- **Debug output**: Shows track number and release date assignment progress for each file
-
-Example output:
-```
 [1/3] https://example.com/episode1.mp3 (Track 1)
-    🏷️ Updating MP3 tags: Album = 'Podcast Name', Track = 1, Release Date = 2025-08-01
-    ✅ Successfully updated Album tag to 'Podcast Name', Track number to 1, and Release Date to 2025-08-01
+📥 Downloading 2025-08-11-143022123456_episode1_a1b2c3d4.mp3...
+✅ Downloaded 2025-08-11-143022123456_episode1_a1b2c3d4.mp3 (15.2 MB)
+🏷️ Updating MP3 tags: Album = 'Tech Podcast', Track = 1
+✅ Successfully updated Album tag to 'Tech Podcast', Track number to 1
 
 [2/3] https://example.com/episode2.mp3 (Track 2)
-    ⏭ Skipping download (duplicate by hash abc123) -> existing_file.mp3
-    🏷️ Updating tags for existing file...
-    🏷️ Updating MP3 tags: Album = 'Podcast Name', Track = 2, Release Date = 2025-08-02
-    ✅ Successfully updated Album tag to 'Podcast Name', Track number to 2, and Release Date to 2025-08-02
+⏭ Skipping download (duplicate by hash e5f6g7h8) -> existing_file.mp3
+🏷️ Updating tags for existing file...
+🏷️ Updating MP3 tags: Album = 'Tech Podcast', Track = 2
+✅ Successfully updated Album tag to 'Tech Podcast', Track number to 2
+
+📊 MP3 Download Summary: 1 downloaded, 1 skipped, 1 duplicates, 0 failed (15.2 MB total)
+🧹 Cleaned up 2 old MP3 file(s)
+🧹 Cleaning up temporary files...
 ```
 
-### Hash-Based Duplicate Detection & Automatic Cleanup 🔐
+## 🔧 Advanced Features
 
-The script automatically prevents downloading duplicate files and maintains clean directories by:
-- **URL-based hashing**: Each MP3 URL generates a unique MD5 hash (first 8 chars used)
-- **Timestamped, clean filenames**: Files are named as: `{YYYY-MM-DD-HHMMSSSSSS}_{base_name}_{hash}.mp3`
-- **Subfolder hash matching**: Before download, the current feed’s subfolder is scanned; if any existing `.mp3` filename contains the same hash, the download is skipped as a duplicate (filename equality not required, timestamp ignored)
-- **Memory tracking**: Stores current filenames during download process for summary and cleanup
-- **Automatic cleanup**: Removes old MP3 files not in current download set
-- **Keep only recent**: Maintains clean directories with latest episodes only
-- **No configuration needed**: Works automatically without any setup
-- **Bandwidth savings**: Skips re-downloading identical content
-- **Storage efficiency**: Prevents duplicate files and removes outdated ones
+### Link Extraction Methods
+- **HTML Parsing:** BeautifulSoup-based element extraction
+- **Regex Matching:** Pattern-based URL discovery
+- **Position Tracking:** Maintains original order from source
+- **Limit Support:** Configurable maximum links per URL
 
-### MP3 Link Extraction 🎵
+### Error Handling
+- **Network Errors:** DNS, SSL, timeout, connection issues
+- **Categorized Reporting:** Specific error types with solutions
+- **Graceful Degradation:** Continues processing other URLs on failure
+- **Detailed Logging:** Emoji-enhanced status messages
 
-The script uses multiple methods to find MP3 links:
-- Parses content elements (`<a>`, `<audio>`, `<source>` tags for HTML)
-- Uses regex patterns to find direct MP3 URLs
-- Extracts in order of appearance, but downloads are initiated in reverse order per page (last-found first)
-- Supports configurable limits on number of links extracted
+### Performance Features
+- **Streaming Downloads:** Memory-efficient for large files
+- **Progress Indicators:** Real-time progress for files >1MB
+- **Concurrent Processing:** Efficient URL and file handling
+- **Smart Cleanup:** Removes only outdated files
 
-### File Management 📁
+## 📦 Dependencies
 
-- **Automatic cleanup**: Always removes temporary content and link files when MP3 downloading is enabled
-- **Hash-based duplicate prevention**: Intelligent detection using URL hashes
-- **Old file removal**: Automatically deletes MP3 files not in current download set
-- **Clean directories**: Keeps only the most recent episodes, removes outdated files
-- **Single-line progress tracking**: Clean progress display for large files
-- **Rich console output**: Emoji-enhanced feedback for better user experience
+- **[requests](https://pypi.org/project/requests/)** - HTTP library for content downloading
+- **[beautifulsoup4](https://pypi.org/project/beautifulsoup4/)** - HTML/XML parsing
+- **[mutagen](https://pypi.org/project/mutagen/)** - MP3 metadata manipulation
 
-### Error Handling ❌
+## 🛠️ Configuration Examples
 
-- Comprehensive error handling for network issues
-- Graceful handling of malformed URLs or content
-- **Enhanced error categorization** (DNS, SSL, timeout, connection issues)
-- Detailed error reporting with emoji indicators
-- Continues processing remaining URLs even if some fail
-
-## Dependencies
-
-- [`requests`](https://pypi.org/project/requests/) - HTTP library for downloading content
-- [`beautifulsoup4`](https://pypi.org/project/beautifulsoup4/) - HTML parsing library
-- [`mutagen`](https://pypi.org/project/mutagen/) - MP3 metadata and tagging library
-- [`pyinstaller`](https://pypi.org/project/pyinstaller/) - For creating standalone executables
-
-## Examples
-
-### Download MP3 Files (Recommended Usage)
-
+### Minimal Configuration (Link Extraction Only)
 ```json
 {
   "urls": {
-    "Daily News": "https://feeds.acast.com/public/shows/daily-news"
+    "My Podcast": "https://feeds.example.com/podcast"
   },
-  "output_directory": "~/Downloads/podcasts",
+  "download_mp3_files": false
+}
+```
+
+### Full Download with Tagging
+```json
+{
+  "urls": {
+    "Daily News": "https://feeds.example.com/news",
+    "Tech Talk": "https://feeds.example.com/tech"
+  },
+  "output_directory": "~/Podcasts",
   "download_mp3_files": true,
-  "max_mp3_links": 3,
-  "timeout": 60,
-  "verify_ssl": true
+  "enable_album_tagging": true,
+  "enable_track_tagging": true,
+  "enable_release_date_tagging": true,
+  "max_mp3_links": 10,
+  "timeout": 60
 }
 ```
 
-**Note**: This is the primary intended usage - downloading MP3 files with hash-based duplicate detection automatically enabled.
-
-### Extract Links Only (Alternative Usage)
-
-```json
-{
-  "urls": {
-    "My Podcast": "https://feeds.acast.com/public/shows/my-podcast"
-  },
-  "output_directory": "./podcast_links",
-  "download_mp3_files": false,
-  "max_mp3_links": 10
-}
-```
-
-### Backward Compatibility
-
-The script supports the old array format for URLs:
-
+### Legacy URL Format Support
 ```json
 {
   "urls": [
-    "https://feeds.acast.com/public/shows/podcast-1",
-    "https://feeds.acast.com/public/shows/podcast-2"
-  ]
+    "https://feeds.example.com/podcast1",
+    "https://feeds.example.com/podcast2"
+  ],
+  "download_mp3_files": true
 }
 ```
 
-## Building Standalone Executable
+## 🚨 Troubleshooting
 
-Use PyInstaller to create a standalone executable:
+### Common Issues
 
-```bash
-pyinstaller --onefile acst-dl.py
-```
+**Config file not found**
+- Ensure `acst-dl-config.json` exists in the script directory
+- Check file permissions and JSON syntax
 
-## License
+**No MP3 links found**
+- Verify the URL contains MP3 links
+- Check if authentication is required
+- Try increasing `max_mp3_links` value
 
-This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) file for details.
+**SSL certificate errors**
+- Set `"verify_ssl": false` for problematic certificates
+- Check network connectivity and firewall settings
 
-## Contributing
+**Permission errors**
+- Verify write permissions for output directory
+- Check available disk space
+
+**Network timeouts**
+- Increase `timeout` value for slow connections
+- Check internet connectivity
+
+### Debug Information
+
+The script provides detailed status information:
+- 🚀 Startup and configuration loading
+- 📋 URL processing progress
+- 🎵 MP3 extraction and download status
+- 🏷️ Tagging progress and results
+- ⏭ Duplicate detection notifications
+- 🗑️ File cleanup operations
+- ✅ Success confirmations
+- ❌ Error messages with solutions
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -300,31 +306,10 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 4. Add tests if applicable
 5. Submit a pull request
 
-## Troubleshooting
+## 🔮 Future Enhancements
 
-### Common Issues
-
-**Config file not found**: Ensure [`acst-dl-config.json.example`](acst-dl-config.json.example) exists in the same directory as the script.
-
-**Permission errors**: Check that the output directory is writable and you have sufficient permissions.
-
-**Network timeouts**: Increase the `timeout` value in the configuration for slow connections.
-
-**No MP3 links found**: Some podcast feeds may use different formats or require authentication.
-
-**SSL certificate errors**: Set `"verify_ssl": false` in the configuration to bypass SSL certificate verification for problematic servers.
-
-**Duplicate detection**: Files with the same URL produce the same hash. The downloader skips a new download if any `.mp3` in the current subfolder already contains that hash in its filename, even when the base names differ.
-
-### Console Output
-
-The script provides rich emoji-enhanced output including:
-- 🚀 Startup and configuration loading
-- 📋 Processing status with progress indicators
-- 🎵 MP3 extraction and download status
-- 🏷️ MP3 tagging progress and results
-- ⏭ Duplicate detection notifications
-- 🗑️ Old file cleanup notifications
-- ✅ Success confirmations
-- ❌ Error messages with clear indicators
-- 📊 Detailed summary statistics with cleanup counts
+- Support for additional audio formats
+- Parallel download capabilities
+- Web interface for configuration
+- Playlist generation features
+- Advanced filtering options
