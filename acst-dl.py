@@ -60,12 +60,18 @@ def create_output_directory(output_dir):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
 
-def update_mp3_tags(filepath, album_name, track_number=None):
-    """Update MP3 tags, specifically setting the Album tag to the folder name and optionally the track number."""
+def update_mp3_tags(
+    filepath,
+    album_name,
+    track_number=None,
+    enable_track_tagging=False,
+    enable_release_date_tagging=False,
+):
+    """Update MP3 tags, specifically setting the Album tag to the folder name and optionally the track number and release date."""
     try:
-        # Calculate release date once if track_number is provided
+        # Calculate release date once if track_number is provided and release date tagging is enabled
         release_date = None
-        if track_number is not None:
+        if track_number is not None and enable_release_date_tagging:
             current_time = time.localtime()
             release_date = (
                 f"{current_time.tm_year}-{current_time.tm_mon:02d}-{track_number:02d}"
@@ -73,8 +79,20 @@ def update_mp3_tags(filepath, album_name, track_number=None):
 
         # Build tag info for display
         tag_info = f"Album = '{album_name}'"
-        if track_number is not None:
-            tag_info += f", Track = {track_number}, Release Date = {release_date}"
+        if track_number is not None and enable_track_tagging:
+            tag_info += f", Track = {track_number}"
+        if track_number is not None and enable_release_date_tagging:
+            tag_info += f", Release Date = {release_date}"
+
+        # Add disabled status info
+        disabled_tags = []
+        if track_number is not None and not enable_track_tagging:
+            disabled_tags.append("Track")
+        if track_number is not None and not enable_release_date_tagging:
+            disabled_tags.append("Release Date")
+        if disabled_tags:
+            tag_info += f" ({', '.join(disabled_tags)} tagging disabled)"
+
         print(f"    🏷️ Updating MP3 tags: {tag_info}")
 
         # Load the MP3 file
@@ -89,22 +107,28 @@ def update_mp3_tags(filepath, album_name, track_number=None):
         audio_file.tags.delall("TALB")
         audio_file.tags.add(TALB(encoding=3, text=album_name))
 
-        # Set the Track number tag (TRCK) if provided (always overwrite existing)
-        if track_number is not None:
+        # Set the Track number tag (TRCK) if provided and track tagging is enabled (always overwrite existing)
+        if track_number is not None and enable_track_tagging:
             audio_file.tags.delall("TRCK")
             audio_file.tags.add(TRCK(encoding=3, text=str(track_number)))
 
-            # Set the Release Date tag (TDRC) - always overwrite existing
+        # Set the Release Date tag (TDRC) if provided and release date tagging is enabled (always overwrite existing)
+        if track_number is not None and enable_release_date_tagging:
             audio_file.tags.delall("TDRC")
             audio_file.tags.add(TDRC(encoding=3, text=release_date))
 
         # Save the changes
         audio_file.save()
         success_msg = f"Successfully updated Album tag to '{album_name}'"
-        if track_number is not None:
-            success_msg += (
-                f", Track number to {track_number}, and Release Date to {release_date}"
-            )
+        if track_number is not None and enable_track_tagging:
+            success_msg += f", Track number to {track_number}"
+        if track_number is not None and enable_release_date_tagging:
+            success_msg += f", Release Date to {release_date}"
+
+        # Add disabled status to success message
+        if disabled_tags:
+            success_msg += f" ({', '.join(disabled_tags)} tagging disabled)"
+
         print(f"    ✅ {success_msg}")
         return True
 
@@ -275,8 +299,10 @@ def download_mp3_file(
     timeout=30,
     verify_ssl=True,
     album_name=None,
-    enable_album_tagging=True,
+    enable_album_tagging=False,
     track_number=None,
+    enable_track_tagging=False,
+    enable_release_date_tagging=False,
 ):
     """Download a single MP3 file with hash-based duplicate detection across any local filename."""
     try:
@@ -330,7 +356,11 @@ def download_mp3_file(
                     print(f"    🏷️ Updating tags for existing file...")
                     existing_filepath = os.path.join(output_dir, existing)
                     tag_success = update_mp3_tags(
-                        existing_filepath, album_name, track_number
+                        existing_filepath,
+                        album_name,
+                        track_number,
+                        enable_track_tagging,
+                        enable_release_date_tagging,
                     )
 
                 return {
@@ -398,7 +428,13 @@ def download_mp3_file(
         # Update MP3 tags with Album name and track number (if enabled)
         tag_success = False
         if enable_album_tagging and album_name:
-            tag_success = update_mp3_tags(filepath, album_name, track_number)
+            tag_success = update_mp3_tags(
+                filepath,
+                album_name,
+                track_number,
+                enable_track_tagging,
+                enable_release_date_tagging,
+            )
         elif not enable_album_tagging:
             print(f"    🏷️ Album tagging disabled - skipping tag update")
         else:
@@ -541,8 +577,10 @@ def download_mp3_files(
     timeout=30,
     verify_ssl=True,
     album_name=None,
-    enable_album_tagging=True,
+    enable_album_tagging=False,
     track_mapping=None,
+    enable_track_tagging=False,
+    enable_release_date_tagging=False,
 ):
     """Download all MP3 files from the provided links with hash-based filename duplicate detection."""
     if not mp3_links:
@@ -572,6 +610,8 @@ def download_mp3_files(
             album_name,
             enable_album_tagging,
             track_number,
+            enable_track_tagging,
+            enable_release_date_tagging,
         )
 
         if result["success"]:
@@ -628,7 +668,9 @@ def download_html(
     download_mp3s=False,
     verify_ssl=True,
     album_name=None,
-    enable_album_tagging=True,
+    enable_album_tagging=False,
+    enable_track_tagging=False,
+    enable_release_date_tagging=False,
 ):
     """Download content from URL and save to file, then extract MP3 links."""
     try:
@@ -689,6 +731,8 @@ def download_html(
                     album_name,
                     enable_album_tagging,
                     track_mapping,
+                    enable_track_tagging,
+                    enable_release_date_tagging,
                 )
 
             # Always clean up content and MP3 links files when MP3 downloading is enabled
@@ -762,7 +806,9 @@ def main():
     max_mp3_links = config.get("max_mp3_links", None)
     download_mp3s = config.get("download_mp3_files", False)
     verify_ssl = config.get("verify_ssl", True)
-    enable_album_tagging = config.get("enable_album_tagging", True)
+    enable_album_tagging = config.get("enable_album_tagging", False)
+    enable_track_tagging = config.get("enable_track_tagging", False)
+    enable_release_date_tagging = config.get("enable_release_date_tagging", False)
 
     # Hash-based duplicate detection is always enabled
 
@@ -795,7 +841,11 @@ def main():
         print(f"🎵 MP3 file downloading: ENABLED")
         print(f"🔐 Hash-based filename duplicate detection: ENABLED")
         album_status = "ENABLED" if enable_album_tagging else "DISABLED"
+        track_status = "ENABLED" if enable_track_tagging else "DISABLED"
+        release_date_status = "ENABLED" if enable_release_date_tagging else "DISABLED"
         print(f"🏷️ Album tagging: {album_status}")
+        print(f"🔢 Track number tagging: {track_status}")
+        print(f"📅 Release date tagging: {release_date_status}")
         ssl_status = (
             "ENABLED"
             if verify_ssl
@@ -831,6 +881,8 @@ def main():
             verify_ssl,
             url_name,  # Pass url_name as album_name
             enable_album_tagging,
+            enable_track_tagging,
+            enable_release_date_tagging,
         )
 
         if isinstance(result, dict) and result.get("success"):
