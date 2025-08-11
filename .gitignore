@@ -54,4 +54,5 @@ ansible.cfg
 .notes*
 acst-dl-config.json
 local_install.bash
+notes.txt
 
