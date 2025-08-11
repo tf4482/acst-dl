@@ -95,10 +95,20 @@ The script provides an advanced, configurable tagging system:
 - **Default:** Disabled
 
 ### ⚡ Tag Behavior
-- **Always Overwrite:** All tags are forcefully updated on every run
+- **Smart Updates:** Tags are only written when values actually change
+- **Performance Optimized:** Skips unnecessary file writes to improve speed
 - **Existing Files:** Tags are updated for both new downloads and existing files
 - **Error Resilient:** Tagging failures don't affect the download process
 - **Configurable:** Each tagging type can be independently enabled/disabled
+
+### 🔍 Intelligent Tag Comparison
+The system now includes smart tag comparison to optimize performance:
+
+- **Pre-write Validation:** Compares current tag values with new values before writing
+- **Skip Unchanged:** Automatically skips write operations when tags are already correct
+- **Detailed Logging:** Shows exactly which tag changes are being made
+- **Change Tracking:** Reports specific value changes (e.g., `Album: 'old' → 'new'`)
+- **Write Optimization:** Reduces disk I/O and preserves file modification times
 
 ## 🔐 Duplicate Detection System
 
@@ -177,14 +187,22 @@ python acst-dl.py
 [1/3] https://example.com/episode1.mp3 (Track 1)
 📥 Downloading 2025-08-11-143022123456_episode1_a1b2c3d4.mp3...
 ✅ Downloaded 2025-08-11-143022123456_episode1_a1b2c3d4.mp3 (15.2 MB)
-🏷️ Updating MP3 tags: Album = 'Tech Podcast', Track = 1
+🏷️ Checking MP3 tags: Album = 'Tech Podcast', Track = 1
+🔄 Tag changes needed: Album: 'None' → 'Tech Podcast', Track: 'None' → '1'
 ✅ Successfully updated Album tag to 'Tech Podcast', Track number to 1
 
 [2/3] https://example.com/episode2.mp3 (Track 2)
 ⏭ Skipping download (duplicate by hash e5f6g7h8) -> existing_file.mp3
 🏷️ Updating tags for existing file...
-🏷️ Updating MP3 tags: Album = 'Tech Podcast', Track = 2
-✅ Successfully updated Album tag to 'Tech Podcast', Track number to 2
+🏷️ Checking MP3 tags: Album = 'Tech Podcast', Track = 2
+⏭️ MP3 tags already up-to-date - skipping write operation
+
+[3/3] https://example.com/episode3.mp3 (Track 3)
+📥 Downloading 2025-08-11-143045789012_episode3_i9j0k1l2.mp3...
+✅ Downloaded 2025-08-11-143045789012_episode3_i9j0k1l2.mp3 (12.8 MB)
+🏷️ Checking MP3 tags: Album = 'Tech Podcast', Track = 3
+🔄 Tag changes needed: Album: 'Old Album' → 'Tech Podcast'
+✅ Successfully updated Album tag to 'Tech Podcast', Track number to 3
 
 📊 MP3 Download Summary: 1 downloaded, 1 skipped, 1 duplicates, 0 failed (15.2 MB total)
 🧹 Cleaned up 2 old MP3 file(s)
