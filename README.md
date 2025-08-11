@@ -10,8 +10,9 @@ A Python script specifically designed for downloading MP3 files from podcast fee
 - 📥 Extract MP3 links from podcast feeds (HTML pages, RSS feeds, etc.)
 - 💾 Download MP3 audio files with progress tracking
 - 📁 Organize downloads into named subdirectories
-- 🏷️ **Automatic MP3 tagging** (sets Album tag to folder name and Track numbers from .txt file)
-- 🔢 **Track number tagging** (assigns sequential track numbers based on .txt file order)
+- 🏷️ **Automatic MP3 tagging** (sets Album tag to folder name, Track numbers, and Release dates)
+- 🔢 **Track number tagging** (assigns sequential track numbers for improved media player sorting)
+- 📅 **Release date tagging** (sets custom dates based on track numbers for chronological sorting)
 - � **Hash-based duplicate detection** (prevents re-downloading same files)
 - 🧹 **Automatic cleanup of old files** (keeps only the most recent episodes)
 - ⚡ Configurable download limits and timeouts
@@ -124,8 +125,9 @@ output_directory/
 
 - Filenames are prefixed with a high-resolution timestamp in the format `YYYY-MM-DD-HHMMSSSSSS` (microseconds).
 - MP3 downloads per page are initiated in reverse order of appearance (last-found first).
-- **Each MP3 file is automatically tagged with Album = folder name and Track number** based on the order in the generated .txt file.
-- **Track numbers are applied to both new downloads and existing files** when the script runs.
+- **Each MP3 file is automatically tagged with Album = folder name, Track number, and Release date** based on the order in the generated .txt file.
+- **Track numbers and Release dates are applied to both new downloads and existing files** when the script runs.
+- **Tags are always overwritten** to ensure consistency across all files.
 
 Note: If another file like `episode-001_43e4489f.mp3` (or with a timestamp prefix) is already present in `Podcast Name 1/`, any new URL that hashes to `43e4489f` will be skipped as a duplicate, regardless of the differing base name or timestamp.
 
@@ -135,9 +137,12 @@ Note: If another file like `episode-001_43e4489f.mp3` (or with a timestamp prefi
 
 ### Automatic MP3 Tagging 🏷️
 
-The script automatically updates MP3 metadata tags after downloading:
+The script automatically updates MP3 metadata tags after downloading to improve sortability in media players:
 - **Album tag**: Set to the folder name where the MP3 is downloaded (e.g., "Podcast Name 1")
 - **Track number tag**: Automatically set based on the numbering in the generated .txt file (1, 2, 3, etc.)
+- **Release date tag**: Set to format `YYYY-MM-XX` where YYYY is current year, MM is current month, and XX is the track number (e.g., `2025-08-01`, `2025-08-02`)
+- **Always overwrite**: All tags are forcefully updated on every run to ensure consistency
+- **Media player compatibility**: Track numbers and release dates enable proper chronological sorting in various media players
 - **ID3 tag support**: Uses the mutagen library for robust MP3 tag handling
 - **Automatic tag creation**: Adds ID3 tags to files that don't have them
 - **Existing file support**: Updates tags for both new downloads and previously downloaded files
@@ -145,29 +150,44 @@ The script automatically updates MP3 metadata tags after downloading:
 - **Non-intrusive**: Tagging failures don't affect the download process
 - **Debug logging**: Shows tagging progress and results for each file
 
-### Track Number Tagging 🔢
+### Track Number and Release Date Tagging 🔢📅
 
-The script automatically assigns track numbers to MP3 files based on their order in the generated .txt file:
+The script automatically assigns track numbers and release dates to MP3 files to improve sortability in media players:
 
+**Track Number Features:**
 - **Automatic numbering**: Track numbers are assigned sequentially (1, 2, 3, etc.) based on the order MP3 links appear in the .txt file
 - **ID3 TRCK tag**: Uses the standard ID3 track number tag (TRCK) for maximum compatibility
-- **New and existing files**: Track numbers are applied to both newly downloaded files and previously downloaded files when the script runs
-- **Consistent ordering**: Track numbers correspond exactly to the numbering in the generated MP3 links .txt file
-- **Album integration**: Track numbers work seamlessly with the existing Album tagging feature
-- **Error resilience**: Track numbering failures don't affect the download process
-- **Debug output**: Shows track number assignment progress for each file
+- **Always overwrite**: Track numbers are forcefully updated on every run, even if already present
+
+**Release Date Features:**
+- **Custom date format**: Release dates are set to `YYYY-MM-XX` where YYYY is current year, MM is current month, and XX is the track number (zero-padded)
+- **ID3 TDRC tag**: Uses the standard ID3 recording date tag (TDRC) for maximum compatibility
+- **Chronological sorting**: Enables proper episode ordering in media players that sort by release date
+- **Always overwrite**: Release dates are forcefully updated on every run, even if already present
+
+**Media Player Benefits:**
+- **Improved sorting**: Both track numbers and release dates ensure episodes play in the correct order
+- **Universal compatibility**: Works with most media players that support ID3 tags
+- **Consistent experience**: Provides reliable sorting across different playback applications
+
+**General Features:**
+- **New and existing files**: Both tags are applied to newly downloaded files and previously downloaded files when the script runs
+- **Consistent ordering**: Track numbers and dates correspond exactly to the numbering in the generated MP3 links .txt file
+- **Album integration**: Works seamlessly with the existing Album tagging feature
+- **Error resilience**: Tagging failures don't affect the download process
+- **Debug output**: Shows track number and release date assignment progress for each file
 
 Example output:
 ```
 [1/3] https://example.com/episode1.mp3 (Track 1)
-    🏷️ Updating MP3 tags: Album = 'Podcast Name', Track = 1
-    ✅ Successfully updated Album tag to 'Podcast Name' and Track number to 1
+    🏷️ Updating MP3 tags: Album = 'Podcast Name', Track = 1, Release Date = 2025-08-01
+    ✅ Successfully updated Album tag to 'Podcast Name', Track number to 1, and Release Date to 2025-08-01
 
 [2/3] https://example.com/episode2.mp3 (Track 2)
     ⏭ Skipping download (duplicate by hash abc123) -> existing_file.mp3
     🏷️ Updating tags for existing file...
-    🏷️ Updating MP3 tags: Album = 'Podcast Name', Track = 2
-    ✅ Successfully updated Album tag to 'Podcast Name' and Track number to 2
+    🏷️ Updating MP3 tags: Album = 'Podcast Name', Track = 2, Release Date = 2025-08-02
+    ✅ Successfully updated Album tag to 'Podcast Name', Track number to 2, and Release Date to 2025-08-02
 ```
 
 ### Hash-Based Duplicate Detection & Automatic Cleanup 🔐
