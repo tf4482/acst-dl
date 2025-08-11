@@ -209,26 +209,6 @@ python acst-dl.py
 🧹 Cleaning up temporary files...
 ```
 
-## 🔧 Advanced Features
-
-### Link Extraction Methods
-- **HTML Parsing:** BeautifulSoup-based element extraction
-- **Regex Matching:** Pattern-based URL discovery
-- **Position Tracking:** Maintains original order from source
-- **Limit Support:** Configurable maximum links per URL
-
-### Error Handling
-- **Network Errors:** DNS, SSL, timeout, connection issues
-- **Categorized Reporting:** Specific error types with solutions
-- **Graceful Degradation:** Continues processing other URLs on failure
-- **Detailed Logging:** Emoji-enhanced status messages
-
-### Performance Features
-- **Streaming Downloads:** Memory-efficient for large files
-- **Progress Indicators:** Real-time progress for files >1MB
-- **Concurrent Processing:** Efficient URL and file handling
-- **Smart Cleanup:** Removes only outdated files
-
 ## 📦 Dependencies
 
 - **[requests](https://pypi.org/project/requests/)** - HTTP library for content downloading
@@ -264,17 +244,6 @@ python acst-dl.py
 }
 ```
 
-### Legacy URL Format Support
-```json
-{
-  "urls": [
-    "https://feeds.example.com/podcast1",
-    "https://feeds.example.com/podcast2"
-  ],
-  "download_mp3_files": true
-}
-```
-
 ## 🚨 Troubleshooting
 
 ### Common Issues
@@ -300,17 +269,6 @@ python acst-dl.py
 - Increase `timeout` value for slow connections
 - Check internet connectivity
 
-### Debug Information
-
-The script provides detailed status information:
-- 🚀 Startup and configuration loading
-- 📋 URL processing progress
-- 🎵 MP3 extraction and download status
-- 🏷️ Tagging progress and results
-- ⏭ Duplicate detection notifications
-- 🗑️ File cleanup operations
-- ✅ Success confirmations
-- ❌ Error messages with solutions
 
 ## 📄 License
 
