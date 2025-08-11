@@ -85,12 +85,12 @@ def update_mp3_tags(filepath, album_name, track_number=None):
             audio_file.add_tags()
             print(f"    🏷️ Added new ID3 tags to file")
 
-        # Set the Album tag (TALB)
+        # Set the Album tag (TALB) - always overwrite existing
+        audio_file.tags.delall("TALB")
         audio_file.tags.add(TALB(encoding=3, text=album_name))
 
         # Set the Track number tag (TRCK) if provided (always overwrite existing)
         if track_number is not None:
-            # Remove existing track number tag first, then add new one
             audio_file.tags.delall("TRCK")
             audio_file.tags.add(TRCK(encoding=3, text=str(track_number)))
 
@@ -213,11 +213,7 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
 
     try:
         # Generate filename for MP3 links file
-        if url_name:
-            base_name = url_name
-        else:
-            parsed_url = urlparse(source_url)
-            base_name = parsed_url.netloc.replace(":", "_")
+        base_name = url_name or urlparse(source_url).netloc.replace(":", "_")
 
         timestamp = int(time.time())
         links_filename = f"{base_name}_mp3_links_{timestamp}.txt"
@@ -288,6 +284,9 @@ def download_mp3_file(
         parsed_url = urlparse(mp3_url)
         base_filename = os.path.basename(parsed_url.path)
 
+        # Compute URL hash once (used for duplicate detection and fallback filename)
+        url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
+
         # If no filename in path, generate one from the URL
         if not base_filename or not base_filename.endswith(".mp3"):
             # Use the last part of the path or generate from URL hash
@@ -296,11 +295,7 @@ def download_mp3_file(
                 base_filename = f"{url_parts[-1]}.mp3"
             else:
                 # Generate filename from URL hash
-                url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
                 base_filename = f"audio_{url_hash}.mp3"
-
-        # Compute URL hash (used for duplicate detection irrespective of filename)
-        url_hash = hashlib.md5(mp3_url.encode()).hexdigest()[:8]
         name_part = base_filename.rsplit(".", 1)[0]
 
         # Add high-resolution timestamp prefix YYYY-MM-DD-HHMMSSSSSS (microseconds)
@@ -316,28 +311,35 @@ def download_mp3_file(
         # Skip if any existing MP3 in this subfolder already contains this hash in its filename
         # This supports different base names while preventing re-download by URL hash.
         try:
-            for existing in os.listdir(output_dir):
-                if existing.lower().endswith(".mp3") and url_hash in existing:
-                    print(
-                        f"    ⏭ Skipping download (duplicate by hash {url_hash}) -> {existing}"
+            # Check for existing files with same hash
+            existing_files = [
+                f
+                for f in os.listdir(output_dir)
+                if f.lower().endswith(".mp3") and url_hash in f
+            ]
+
+            if existing_files:
+                existing = existing_files[0]  # Take first match
+                print(
+                    f"    ⏭ Skipping download (duplicate by hash {url_hash}) -> {existing}"
+                )
+
+                # Update tags for existing file if album tagging is enabled
+                tag_success = False
+                if enable_album_tagging and album_name:
+                    print(f"    🏷️ Updating tags for existing file...")
+                    existing_filepath = os.path.join(output_dir, existing)
+                    tag_success = update_mp3_tags(
+                        existing_filepath, album_name, track_number
                     )
 
-                    # Update tags for existing file if album tagging is enabled
-                    existing_filepath = os.path.join(output_dir, existing)
-                    tag_success = False
-                    if enable_album_tagging and album_name:
-                        print(f"    🏷️ Updating tags for existing file...")
-                        tag_success = update_mp3_tags(
-                            existing_filepath, album_name, track_number
-                        )
-
-                    return {
-                        "success": True,
-                        "filename": existing,  # return the existing file name we matched
-                        "skipped": True,
-                        "duplicate": True,
-                        "tags_updated": tag_success,
-                    }
+                return {
+                    "success": True,
+                    "filename": existing,
+                    "skipped": True,
+                    "duplicate": True,
+                    "tags_updated": tag_success,
+                }
         except FileNotFoundError:
             # Directory may not exist yet; will be created by caller
             pass
@@ -442,10 +444,11 @@ def clear_mp3_files(output_dir):
         if not os.path.exists(output_dir):
             return 0
 
-        mp3_files = []
-        for file in os.listdir(output_dir):
-            if file.lower().endswith(".mp3"):
-                mp3_files.append(os.path.join(output_dir, file))
+        mp3_files = [
+            os.path.join(output_dir, f)
+            for f in os.listdir(output_dir)
+            if f.lower().endswith(".mp3")
+        ]
 
         if mp3_files:
             print(
@@ -475,10 +478,10 @@ def clear_all_mp3_files(base_output_dir):
         mp3_files = []
 
         # Walk through all directories and subdirectories
-        for root, dirs, files in os.walk(base_output_dir):
-            for file in files:
-                if file.lower().endswith(".mp3"):
-                    mp3_files.append(os.path.join(root, file))
+        for root, _, files in os.walk(base_output_dir):
+            mp3_files.extend(
+                os.path.join(root, f) for f in files if f.lower().endswith(".mp3")
+            )
 
         if mp3_files:
             print(
@@ -509,17 +512,21 @@ def cleanup_old_mp3_files(output_dir, current_filenames):
 
         cleaned_count = 0
 
-        # Get all MP3 files in the directory
-        for file in os.listdir(output_dir):
-            if file.lower().endswith(".mp3"):
-                if file not in current_filenames:
-                    file_path = os.path.join(output_dir, file)
-                    try:
-                        os.remove(file_path)
-                        print(f"    🗑️ Removed old file: {file}")
-                        cleaned_count += 1
-                    except Exception as e:
-                        print(f"    ❌ Failed to remove old file {file}: {e}")
+        # Get all MP3 files in the directory that are not in current set
+        old_files = [
+            f
+            for f in os.listdir(output_dir)
+            if f.lower().endswith(".mp3") and f not in current_filenames
+        ]
+
+        for file in old_files:
+            file_path = os.path.join(output_dir, file)
+            try:
+                os.remove(file_path)
+                print(f"    🗑️ Removed old file: {file}")
+                cleaned_count += 1
+            except Exception as e:
+                print(f"    ❌ Failed to remove old file {file}: {e}")
 
         return cleaned_count
 
