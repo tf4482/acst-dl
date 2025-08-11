@@ -2,6 +2,7 @@
   "urls": {
       "Kurz Informiert": "https://proxyfeed.svmaudio.com/feeds/heise/kurz-informiert"
   },
+  "output_directory": "test_downloads",
   "timeout": 30,
   "max_mp3_links": 5,
   "download_mp3_files": true,

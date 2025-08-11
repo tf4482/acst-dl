@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 import warnings
 import urllib3
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TALB, TRCK
+from mutagen.id3 import ID3, TALB, TRCK, TDRC
 
 
 def load_config(config_file="acst-dl-config.json"):
@@ -66,6 +66,12 @@ def update_mp3_tags(filepath, album_name, track_number=None):
         tag_info = f"Album = '{album_name}'"
         if track_number is not None:
             tag_info += f", Track = {track_number}"
+            # Create release date: YYYY-MM-XX where YYYY is current year, MM is current month, XX is track number
+            current_time = time.localtime()
+            release_date = (
+                f"{current_time.tm_year}-{current_time.tm_mon:02d}-{track_number:02d}"
+            )
+            tag_info += f", Release Date = {release_date}"
         print(f"    🏷️ Updating MP3 tags: {tag_info}")
 
         # Load the MP3 file
@@ -79,15 +85,32 @@ def update_mp3_tags(filepath, album_name, track_number=None):
         # Set the Album tag (TALB)
         audio_file.tags.add(TALB(encoding=3, text=album_name))
 
-        # Set the Track number tag (TRCK) if provided
+        # Set the Track number tag (TRCK) if provided (always overwrite existing)
         if track_number is not None:
+            # Remove existing track number tag first, then add new one
+            audio_file.tags.delall("TRCK")
             audio_file.tags.add(TRCK(encoding=3, text=str(track_number)))
+
+            # Set the Release Date tag (TDRC) - always overwrite existing
+            # Format: YYYY-MM-XX where YYYY is current year, MM is current month, XX is track number (zero-padded)
+            current_time = time.localtime()
+            release_date = (
+                f"{current_time.tm_year}-{current_time.tm_mon:02d}-{track_number:02d}"
+            )
+            audio_file.tags.delall("TDRC")
+            audio_file.tags.add(TDRC(encoding=3, text=release_date))
 
         # Save the changes
         audio_file.save()
         success_msg = f"Successfully updated Album tag to '{album_name}'"
         if track_number is not None:
-            success_msg += f" and Track number to {track_number}"
+            current_time = time.localtime()
+            release_date = (
+                f"{current_time.tm_year}-{current_time.tm_mon:02d}-{track_number:02d}"
+            )
+            success_msg += (
+                f", Track number to {track_number}, and Release Date to {release_date}"
+            )
         print(f"    ✅ {success_msg}")
         return True
 
@@ -296,7 +319,7 @@ def download_mp3_file(
         filename = f"{ts}_{name_part}_{url_hash}.mp3"
         filepath = os.path.join(output_dir, filename)
 
-        # New: Skip if any existing MP3 in this subfolder already contains this hash in its filename
+        # Skip if any existing MP3 in this subfolder already contains this hash in its filename
         # This supports different base names while preventing re-download by URL hash.
         try:
             for existing in os.listdir(output_dir):
