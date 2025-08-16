@@ -218,9 +218,39 @@ def get_mp3_metadata(url, timeout=10, verify_ssl=True):
             etag = response.headers.get('etag', '')
             content_type = response.headers.get('content-type', '')
             
-            # Create a content signature from available metadata
-            # Use content-length as primary identifier, with last-modified and etag as secondary
-            metadata_signature = f"{content_length}|{last_modified}|{etag}|{content_type}"
+            # Extract meaningful parts of the URL for cases where server metadata is insufficient
+            parsed_url = urlparse(url)
+            url_path = parsed_url.path
+            
+            # Extract a meaningful identifier from the URL path
+            # For Art19 URLs like "/episodes/uuid.mp3", we want to capture the UUID
+            path_parts = [part for part in url_path.split('/') if part]
+            if len(path_parts) >= 2 and path_parts[-2] == 'episodes':
+                # Art19 pattern: /episodes/uuid.mp3
+                filename = path_parts[-1]
+                if '.' in filename:
+                    url_identifier = filename.split('.')[0]  # Get UUID without extension
+                else:
+                    url_identifier = filename
+            elif path_parts:
+                # Fallback: use the last part of the path
+                filename = path_parts[-1]
+                if '.' in filename:
+                    url_identifier = filename.split('.')[0]  # Remove extension
+                else:
+                    url_identifier = filename
+            else:
+                # Fallback: use the full path if no clear structure
+                url_identifier = url_path.replace('/', '_')
+            
+            # Create a content signature from available metadata and URL
+            # If content-length is 0 or missing, rely more heavily on URL path and other metadata
+            if content_length == '0' or not content_length:
+                # Server doesn't provide useful content-length, use URL path as primary identifier
+                metadata_signature = f"url:{url_identifier}|{last_modified}|{etag}|{content_type}"
+            else:
+                # Normal case: use content-length as primary identifier
+                metadata_signature = f"size:{content_length}|{last_modified}|{etag}|{content_type}|{url_identifier}"
             
             return {
                 'success': True,
@@ -229,7 +259,8 @@ def get_mp3_metadata(url, timeout=10, verify_ssl=True):
                 'etag': etag,
                 'content_type': content_type,
                 'signature': metadata_signature,
-                'final_url': response.url  # In case of redirects
+                'final_url': response.url,  # In case of redirects
+                'url_identifier': url_identifier
             }
         else:
             return {'success': False, 'error': f'HTTP {response.status_code}'}
@@ -326,9 +357,12 @@ def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
                 if content_signature not in seen_content:
                     seen_content.add(content_signature)
                     unique_links_with_positions.append((position, url))
-                    print(f"    ✅ Unique content: {url} (size: {metadata['content_length']} bytes)")
+                    if metadata['content_length'] == '0' or not metadata['content_length']:
+                        print(f"    ✅ Unique content: {url} (ID: {metadata['url_identifier']})")
+                    else:
+                        print(f"    ✅ Unique content: {url} (size: {metadata['content_length']} bytes)")
                 else:
-                    print(f"    🔄 Duplicate content: {url} (same as previous)")
+                    print(f"    🔄 Duplicate content: {url} (same signature as previous)")
             else:
                 # If we can't get metadata, include the link anyway but warn
                 unique_links_with_positions.append((position, url))
