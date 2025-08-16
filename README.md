@@ -141,7 +141,7 @@ The tool uses advanced content-based duplicate detection:
 - **URL-based deduplication**: Removes identical URLs during link extraction
 - **Content-based deduplication**: Uses HEAD requests to compare file metadata (size, modification date, ETag)
 - **Smart URL analysis**: Extracts unique identifiers from URLs when server metadata is insufficient
-- **Performance optimized**: Only checks first `max_mp3_links * 2` files to avoid delays on large feeds
+- **Performance optimized**: Only checks first `max_mp3_links * 2` files with concurrent processing to avoid delays on large feeds
 - **Multi-service support**: Handles various podcast hosting services (Art19, Libsyn, Anchor, etc.)
 - **Hash-based filename detection**: Prevents re-downloading during subsequent runs
 - Updates tags on existing files if needed
@@ -150,7 +150,7 @@ The tool uses advanced content-based duplicate detection:
 
 1. **Link Collection**: Extracts all MP3 links from HTML/RSS content
 2. **URL Deduplication**: Removes any identical URLs
-3. **Metadata Checking**: Performs HEAD requests on up to `max_mp3_links * 2` links
+3. **Metadata Checking**: Performs concurrent HEAD requests on up to `max_mp3_links * 2` links (up to 8 simultaneous requests)
 4. **Smart Content Analysis**:
    - **With file size**: Uses content-length + metadata + URL identifier for signature
    - **Without file size**: Falls back to URL identifier + available metadata (ETag, last-modified)
@@ -281,7 +281,9 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
   - **Smart URL analysis**: Extracts unique episode identifiers from URL patterns (Art19 UUIDs, etc.)
   - **Improved metadata fallback**: Better handling of servers that don't provide content-length headers
   - **Multi-service support**: Optimized for Art19, Libsyn, Anchor, and other major podcast platforms
+  - **Concurrent processing**: Up to 8 simultaneous HEAD requests for significantly faster deduplication
   - **Enhanced logging**: Shows episode IDs and clearer duplicate detection messages
+  - **Reduced timeouts**: Optimized timeout settings for concurrent operations
 
 - **v0.2.0**: Enhanced duplicate detection and extraction improvements
   - **Content-based duplicate detection**: Uses file metadata (size, modification date, ETag) to identify duplicate content from different URLs

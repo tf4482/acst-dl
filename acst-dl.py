@@ -21,6 +21,7 @@ import warnings
 import urllib3
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TALB, TRCK, TDRC
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def load_config(config_file="acst-dl-config.json"):
@@ -342,14 +343,38 @@ def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
         links_to_check = mp3_links_with_positions[:dedup_limit]
         
         print(f"  🔍 Performing content-based deduplication on first {len(links_to_check)} of {len(mp3_links_with_positions)} MP3 links...")
+        print(f"  ⚡ Using concurrent requests for faster processing...")
         
         seen_content = set()  # Track content signatures
         unique_links_with_positions = []
         
-        for position, url in links_to_check:
-            # Get metadata for this URL
-            metadata = get_mp3_metadata(url, timeout=10, verify_ssl=verify_ssl)
+        # Use ThreadPoolExecutor for concurrent HEAD requests
+        def get_url_metadata(pos_url_tuple):
+            position, url = pos_url_tuple
+            metadata = get_mp3_metadata(url, timeout=5, verify_ssl=verify_ssl)  # Reduced timeout
+            return position, url, metadata
+        
+        # Process URLs concurrently with up to 8 threads
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            # Submit all tasks
+            future_to_url = {executor.submit(get_url_metadata, pos_url): pos_url for pos_url in links_to_check}
             
+            # Process results as they complete (maintains order by sorting later)
+            results = []
+            for future in as_completed(future_to_url):
+                try:
+                    position, url, metadata = future.result()
+                    results.append((position, url, metadata))
+                except Exception as e:
+                    position, url = future_to_url[future]
+                    print(f"    ⚠️ Error checking {url}: {e}")
+                    results.append((position, url, {'success': False, 'error': str(e)}))
+        
+        # Sort results by original position to maintain order
+        results.sort(key=lambda x: x[0])
+        
+        # Process sorted results for deduplication
+        for position, url, metadata in results:
             if metadata['success']:
                 content_signature = metadata['signature']
                 
