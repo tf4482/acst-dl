@@ -223,30 +223,50 @@ def get_mp3_metadata(url, timeout=10, verify_ssl=True):
             parsed_url = urlparse(url)
             url_path = parsed_url.path
             
-            # Extract a meaningful identifier from the URL path
-            # For Art19 URLs like "/episodes/uuid.mp3", we want to capture the UUID
+            # Extract a meaningful identifier from the URL path using universal approach
+            # Look for unique identifiers in the URL path that could distinguish episodes
             path_parts = [part for part in url_path.split('/') if part]
-            if len(path_parts) >= 2 and path_parts[-2] == 'episodes':
-                # Art19 pattern: /episodes/uuid.mp3
-                filename = path_parts[-1]
-                if '.' in filename:
-                    url_identifier = filename.split('.')[0]  # Get UUID without extension
-                else:
-                    url_identifier = filename
+            
+            # Strategy: Find the most unique-looking part of the URL path
+            # Look for UUIDs, hashes, or other unique identifiers
+            unique_parts = []
+            
+            for part in path_parts:
+                # Remove file extensions for analysis
+                clean_part = part.split('.')[0] if '.' in part else part
+                
+                # Skip common/generic path components
+                if clean_part.lower() in ['media', 'audio', 'mp3', 'file', 'download', 'public', 'shows', 'episodes', 'e', 's', 'p', 'open']:
+                    continue
+                
+                # Look for parts that seem like unique identifiers
+                # UUIDs (36 chars with dashes), hashes (32+ chars), or long alphanumeric strings (16+ chars)
+                if (len(clean_part) >= 16 and
+                    (clean_part.replace('-', '').replace('_', '').isalnum())):
+                    unique_parts.append(clean_part)
+            
+            # Use the most unique-looking parts, preferring longer ones
+            if unique_parts:
+                # Sort by length (descending) to get the most unique identifier first
+                unique_parts.sort(key=len, reverse=True)
+                url_identifier = '_'.join(unique_parts[:2])  # Take up to 2 most unique parts
             elif path_parts:
-                # Fallback: use the last part of the path
+                # Fallback: use the last meaningful part
                 filename = path_parts[-1]
-                if '.' in filename:
-                    url_identifier = filename.split('.')[0]  # Remove extension
-                else:
-                    url_identifier = filename
+                url_identifier = filename.split('.')[0] if '.' in filename else filename
             else:
-                # Fallback: use the full path if no clear structure
-                url_identifier = url_path.replace('/', '_')
+                # Final fallback: use the full path
+                url_identifier = url_path.replace('/', '_').replace('.', '_')
             
             # Create a content signature from available metadata and URL
-            # If content-length is 0 or missing, rely more heavily on URL path and other metadata
-            if content_length == '0' or not content_length:
+            # Check if content-length is useful for MP3 files (should be at least 100KB for realistic MP3s)
+            try:
+                content_length_bytes = int(content_length) if content_length else 0
+                is_realistic_size = content_length_bytes >= 100000  # At least 100KB
+            except (ValueError, TypeError):
+                is_realistic_size = False
+            
+            if not content_length or content_length == '0' or not is_realistic_size:
                 # Server doesn't provide useful content-length, use URL path as primary identifier
                 metadata_signature = f"url:{url_identifier}|{last_modified}|{etag}|{content_type}"
             else:
