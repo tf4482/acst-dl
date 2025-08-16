@@ -5,7 +5,7 @@ A powerful Python-based podcast downloader that extracts and downloads MP3 files
 ## 🎵 Features
 
 - **Multi-source Support**: Download from HTML pages, RSS feeds, and any web content containing MP3 links
-- **Smart Content-Based Duplicate Detection**: Advanced duplicate detection using file metadata prevents re-downloading the same content from different URLs
+- **Smart Content-Based Duplicate Detection**: Advanced duplicate detection using file metadata and URL analysis prevents re-downloading the same content from different URLs
 - **MP3 Tag Management**: Automatically tag downloaded files with album, track number, and release date information
 - **Organized Storage**: Creates structured output directories with subfolders for each podcast source
 - **Progress Tracking**: Real-time download progress with detailed logging and emoji indicators
@@ -140,8 +140,9 @@ Downloaded MP3 files use the format:
 The tool uses advanced content-based duplicate detection:
 - **URL-based deduplication**: Removes identical URLs during link extraction
 - **Content-based deduplication**: Uses HEAD requests to compare file metadata (size, modification date, ETag)
+- **Smart URL analysis**: Extracts unique identifiers from URLs when server metadata is insufficient
 - **Performance optimized**: Only checks first `max_mp3_links * 2` files to avoid delays on large feeds
-- **Smart identification**: Detects when different URLs point to the same content
+- **Multi-service support**: Handles various podcast hosting services (Art19, Libsyn, Anchor, etc.)
 - **Hash-based filename detection**: Prevents re-downloading during subsequent runs
 - Updates tags on existing files if needed
 
@@ -150,10 +151,22 @@ The tool uses advanced content-based duplicate detection:
 1. **Link Collection**: Extracts all MP3 links from HTML/RSS content
 2. **URL Deduplication**: Removes any identical URLs
 3. **Metadata Checking**: Performs HEAD requests on up to `max_mp3_links * 2` links
-4. **Content Comparison**: Compares file size, last-modified date, and ETag to identify duplicates
-5. **Final Selection**: Takes unique content from the top of the list up to `max_mp3_links`
+4. **Smart Content Analysis**:
+   - **With file size**: Uses content-length + metadata + URL identifier for signature
+   - **Without file size**: Falls back to URL identifier + available metadata (ETag, last-modified)
+   - **URL parsing**: Extracts episode UUIDs from Art19 URLs (`/episodes/uuid.mp3`) and similar patterns
+5. **Content Comparison**: Compares signatures to identify truly duplicate content
+6. **Final Selection**: Takes unique content from the top of the list up to `max_mp3_links`
 
-This approach effectively handles cases where the same podcast episode is available from multiple URLs (e.g., CDN mirrors, feed redirects).
+#### Supported Podcast Services
+
+The deduplication system is designed to work with various podcast hosting services:
+- **Art19**: Extracts episode UUIDs from `/episodes/uuid.mp3` patterns
+- **Generic CDNs**: Uses filename and path analysis for identification
+- **Standard servers**: Relies on content-length and HTTP headers
+- **Redirect services**: Follows redirects to get final URL metadata
+
+This approach effectively handles cases where the same podcast episode is available from multiple URLs (e.g., CDN mirrors, feed redirects) while correctly identifying different episodes even when servers provide minimal metadata.
 
 ### MP3 Tag Management
 
@@ -263,6 +276,12 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 - Check the [`output_directory`](acst-dl-config.json:5) permissions before running
 
 ## 🔄 Version History
+
+- **v0.2.1**: Enhanced content deduplication for diverse podcast hosting services
+  - **Smart URL analysis**: Extracts unique episode identifiers from URL patterns (Art19 UUIDs, etc.)
+  - **Improved metadata fallback**: Better handling of servers that don't provide content-length headers
+  - **Multi-service support**: Optimized for Art19, Libsyn, Anchor, and other major podcast platforms
+  - **Enhanced logging**: Shows episode IDs and clearer duplicate detection messages
 
 - **v0.2.0**: Enhanced duplicate detection and extraction improvements
   - **Content-based duplicate detection**: Uses file metadata (size, modification date, ETag) to identify duplicate content from different URLs
