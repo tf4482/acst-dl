@@ -10,12 +10,6 @@ python = ">=3.8,<3.15"
 requests = "^2.31.0"
 beautifulsoup4 = "^4.12.0"
 pyinstaller = "^6.15.0"
-fastapi = "^0.104.1"
-uvicorn = {extras = ["standard"], version = "^0.24.0"}
-jinja2 = "^3.1.2"
-python-multipart = "^0.0.6"
-websockets = "^12.0"
-aiofiles = "^23.2.1"
 mutagen = "^1.47.0"
 
 [build-system]
