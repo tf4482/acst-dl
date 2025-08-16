@@ -5,7 +5,7 @@ A powerful Python-based podcast downloader that extracts and downloads MP3 files
 ## 🎵 Features
 
 - **Multi-source Support**: Download from HTML pages, RSS feeds, and any web content containing MP3 links
-- **Smart Duplicate Detection**: Hash-based filename detection prevents re-downloading the same content
+- **Smart Content-Based Duplicate Detection**: Advanced duplicate detection using file metadata prevents re-downloading the same content from different URLs
 - **MP3 Tag Management**: Automatically tag downloaded files with album, track number, and release date information
 - **Organized Storage**: Creates structured output directories with subfolders for each podcast source
 - **Progress Tracking**: Real-time download progress with detailed logging and emoji indicators
@@ -137,11 +137,23 @@ Downloaded MP3 files use the format:
 
 ### Duplicate Detection
 
-The tool uses hash-based duplicate detection:
-- Generates MD5 hash from MP3 URL
-- Checks existing files for matching hash
-- Skips download if duplicate found
+The tool uses advanced content-based duplicate detection:
+- **URL-based deduplication**: Removes identical URLs during link extraction
+- **Content-based deduplication**: Uses HEAD requests to compare file metadata (size, modification date, ETag)
+- **Performance optimized**: Only checks first `max_mp3_links * 2` files to avoid delays on large feeds
+- **Smart identification**: Detects when different URLs point to the same content
+- **Hash-based filename detection**: Prevents re-downloading during subsequent runs
 - Updates tags on existing files if needed
+
+#### How Content Deduplication Works
+
+1. **Link Collection**: Extracts all MP3 links from HTML/RSS content
+2. **URL Deduplication**: Removes any identical URLs
+3. **Metadata Checking**: Performs HEAD requests on up to `max_mp3_links * 2` links
+4. **Content Comparison**: Compares file size, last-modified date, and ETag to identify duplicates
+5. **Final Selection**: Takes unique content from the top of the list up to `max_mp3_links`
+
+This approach effectively handles cases where the same podcast episode is available from multiple URLs (e.g., CDN mirrors, feed redirects).
 
 ### MP3 Tag Management
 
@@ -251,6 +263,12 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 - Check the [`output_directory`](acst-dl-config.json:5) permissions before running
 
 ## 🔄 Version History
+
+- **v0.2.0**: Enhanced duplicate detection and extraction improvements
+  - **Content-based duplicate detection**: Uses file metadata (size, modification date, ETag) to identify duplicate content from different URLs
+  - **Performance optimized deduplication**: Limits metadata checking to `max_mp3_links * 2` for faster processing on large feeds
+  - **Improved link extraction**: Collects all MP3 links first, then applies deduplication and limits from the top
+  - Enhanced HEAD request handling with proper SSL and timeout configuration
 
 - **v0.1.0**: Initial release with core downloading functionality
   - MP3 link extraction from HTML/RSS
