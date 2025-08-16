@@ -402,16 +402,13 @@ def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
                 if content_signature not in seen_content:
                     seen_content.add(content_signature)
                     unique_links_with_positions.append((position, url))
-                    if metadata['content_length'] == '0' or not metadata['content_length']:
-                        print(f"    ✅ Unique content: {url} (ID: {metadata['url_identifier']})")
-                    else:
-                        print(f"    ✅ Unique content: {url} (size: {metadata['content_length']} bytes)")
+                    # Don't print individual unique content messages - too verbose
                 else:
-                    print(f"    🔄 Duplicate content: {url} (same signature as previous)")
+                    # Overwrite line for duplicate detection
+                    print(f"\r    🔄 Checking: {len(seen_content)} unique, {len(results) - len(unique_links_with_positions)} duplicates...", end="", flush=True)
             else:
-                # If we can't get metadata, include the link anyway but warn
+                # If we can't get metadata, include the link anyway but don't spam output
                 unique_links_with_positions.append((position, url))
-                print(f"    ⚠️ Could not verify: {url} ({metadata['error']}) - including anyway")
 
         # Extract just the URLs in order
         ordered_mp3_links = [url for position, url in unique_links_with_positions]
@@ -423,7 +420,8 @@ def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
         # Reverse order so the last-found MP3 is downloaded first
         ordered_mp3_links = list(reversed(ordered_mp3_links))
 
-        print(f"  📊 Content deduplication result: {len(mp3_links_with_positions)} → {len(ordered_mp3_links)} unique links")
+        # Clear the overwrite line and show final result
+        print(f"\r  📊 Content deduplication result: {len(mp3_links_with_positions)} → {len(ordered_mp3_links)} unique links")
 
         return ordered_mp3_links
 
@@ -548,22 +546,28 @@ def download_mp3_file(
 
             if existing_files:
                 existing = existing_files[0]  # Take first match
-                print(
-                    f"    ⏭ Skipping download (duplicate by hash {url_hash}) -> {existing}"
-                )
+                # Use overwrite for skip messages - don't clutter output
+                print(f"\r    ⏭ Skipping duplicate: {existing}", end="", flush=True)
 
-                # Update tags for existing file if album tagging is enabled
+                # Update tags for existing file if album tagging is enabled (suppress output)
                 tag_success = False
                 if enable_album_tagging and album_name:
-                    print(f"    🏷️ Updating tags for existing file...")
                     existing_filepath = os.path.join(output_dir, existing)
-                    tag_success = update_mp3_tags(
-                        existing_filepath,
-                        album_name,
-                        track_number,
-                        enable_track_tagging,
-                        enable_release_date_tagging,
-                    )
+                    # Temporarily redirect stdout to suppress tag update output for skipped files
+                    import sys
+                    from io import StringIO
+                    old_stdout = sys.stdout
+                    sys.stdout = StringIO()
+                    try:
+                        tag_success = update_mp3_tags(
+                            existing_filepath,
+                            album_name,
+                            track_number,
+                            enable_track_tagging,
+                            enable_release_date_tagging,
+                        )
+                    finally:
+                        sys.stdout = old_stdout
 
                 return {
                     "success": True,
@@ -581,7 +585,8 @@ def download_mp3_file(
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
-        print(f"    📥 Downloading {filename}...")
+        # Use overwrite for download start message
+        print(f"\r    📥 Downloading {filename}...", end="", flush=True)
 
         # Disable SSL warnings if SSL verification is disabled
         if not verify_ssl:
@@ -595,29 +600,45 @@ def download_mp3_file(
         # Download with progress indication for large files
         total_size = int(response.headers.get("content-length", 0))
 
+        def create_progress_bar(progress, width=40):
+            """Create a colored progress bar with Unicode blocks."""
+            filled = int(width * progress / 100)
+            bar = '█' * filled + '░' * (width - filled)
+            # Add colors: green for progress, gray for remaining
+            colored_bar = f'\033[92m{"█" * filled}\033[90m{"░" * (width - filled)}\033[0m'
+            return colored_bar
+
         with open(filepath, "wb") as f:
             if total_size > 0:
                 downloaded = 0
                 show_progress = (
                     total_size > 1024 * 1024
                 )  # Show progress for files > 1MB
+                
+                if show_progress:
+                    print()  # New line for progress bar
+                
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
-                        # Simple progress indication for large files (>1MB)
-                        if show_progress and downloaded % (1024 * 1024) == 0:
+                        # Colored progress bar for large files (>1MB)
+                        if show_progress and downloaded % (256 * 1024) == 0:  # Update every 256KB
                             progress = (downloaded / total_size) * 100
+                            progress_bar = create_progress_bar(progress)
+                            downloaded_mb = downloaded / (1024 * 1024)
+                            total_mb = total_size / (1024 * 1024)
                             print(
-                                f"\r      ⏳ Progress: {progress:.1f}%",
+                                f"\r      {progress_bar} {progress:5.1f}% ({downloaded_mb:.1f}/{total_mb:.1f} MB)",
                                 end="",
                                 flush=True,
                             )
 
                 # Show 100% completion for large files
                 if show_progress:
-                    print(f"\r      ⏳ Progress: 100.0%", end="", flush=True)
-                    print()  # Print newline after progress is complete
+                    progress_bar = create_progress_bar(100)
+                    total_mb = total_size / (1024 * 1024)
+                    print(f"\r      {progress_bar} 100.0% ({total_mb:.1f}/{total_mb:.1f} MB)")
             else:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
@@ -625,7 +646,8 @@ def download_mp3_file(
 
         file_size = os.path.getsize(filepath)
         size_mb = file_size / (1024 * 1024)
-        print(f"    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
+        # Clear overwrite line and show permanent success message
+        print(f"\r    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
 
         # Update MP3 tags with Album name and track number (if enabled)
         tag_success = False
@@ -824,11 +846,15 @@ def download_mp3_files(
                 skipped += 1
                 if result.get("duplicate"):
                     duplicates += 1
+                # Clear any overwrite lines for skipped files
+                print(f"\r", end="")
             else:
                 successful += 1
                 total_size += result.get("size", 0)
         else:
             failed += 1
+            # Clear overwrite line for failed downloads
+            print(f"\r    ❌ Failed to download")
 
     # Clean up old MP3 files that are not in the current set
     cleaned_count = cleanup_old_mp3_files(output_dir, current_filenames)
