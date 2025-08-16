@@ -154,17 +154,18 @@ The tool uses advanced content-based duplicate detection:
 4. **Smart Content Analysis**:
    - **With file size**: Uses content-length + metadata + URL identifier for signature
    - **Without file size**: Falls back to URL identifier + available metadata (ETag, last-modified)
-   - **URL parsing**: Extracts episode UUIDs from Art19 URLs (`/episodes/uuid.mp3`) and similar patterns
+   - **URL parsing**: Extracts unique identifiers from URL paths (UUIDs, hashes, episode IDs) regardless of hosting service
 5. **Content Comparison**: Compares signatures to identify truly duplicate content
 6. **Final Selection**: Takes unique content from the top of the list up to `max_mp3_links`
 
-#### Supported Podcast Services
+#### Universal Podcast Service Support
 
-The deduplication system is designed to work with various podcast hosting services:
-- **Art19**: Extracts episode UUIDs from `/episodes/uuid.mp3` patterns
-- **Generic CDNs**: Uses filename and path analysis for identification
-- **Standard servers**: Relies on content-length and HTTP headers
-- **Redirect services**: Follows redirects to get final URL metadata
+The deduplication system uses intelligent pattern recognition that works universally:
+- **Smart identifier extraction**: Automatically finds UUIDs, hashes, and unique episode IDs in URL paths
+- **Generic pattern recognition**: Works with any podcast hosting service without provider-specific code
+- **Fallback mechanisms**: Uses filename and path analysis when unique identifiers aren't found
+- **Metadata integration**: Combines URL analysis with HTTP headers for robust identification
+- **Redirect handling**: Follows redirects to get final URL metadata
 
 This approach effectively handles cases where the same podcast episode is available from multiple URLs (e.g., CDN mirrors, feed redirects) while correctly identifying different episodes even when servers provide minimal metadata.
 
@@ -280,7 +281,7 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 - **v0.2.1**: Enhanced content deduplication for diverse podcast hosting services
   - **Smart URL analysis**: Extracts unique episode identifiers from URL patterns (Art19 UUIDs, etc.)
   - **Improved metadata fallback**: Better handling of servers that don't provide content-length headers
-  - **Multi-service support**: Optimized for Art19, Libsyn, Anchor, and other major podcast platforms
+  - **Universal compatibility**: Intelligent URL analysis works with any podcast hosting service
   - **Concurrent processing**: Up to 8 simultaneous HEAD requests for significantly faster deduplication
   - **Enhanced logging**: Shows episode IDs and clearer duplicate detection messages
   - **Reduced timeouts**: Optimized timeout settings for concurrent operations
