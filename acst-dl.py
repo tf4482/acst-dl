@@ -21,6 +21,7 @@ import warnings
 import urllib3
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TALB, TRCK, TDRC
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def load_config(config_file="acst-dl-config.json"):
@@ -222,30 +223,50 @@ def get_mp3_metadata(url, timeout=10, verify_ssl=True):
             parsed_url = urlparse(url)
             url_path = parsed_url.path
             
-            # Extract a meaningful identifier from the URL path
-            # For Art19 URLs like "/episodes/uuid.mp3", we want to capture the UUID
+            # Extract a meaningful identifier from the URL path using universal approach
+            # Look for unique identifiers in the URL path that could distinguish episodes
             path_parts = [part for part in url_path.split('/') if part]
-            if len(path_parts) >= 2 and path_parts[-2] == 'episodes':
-                # Art19 pattern: /episodes/uuid.mp3
-                filename = path_parts[-1]
-                if '.' in filename:
-                    url_identifier = filename.split('.')[0]  # Get UUID without extension
-                else:
-                    url_identifier = filename
+            
+            # Strategy: Find the most unique-looking part of the URL path
+            # Look for UUIDs, hashes, or other unique identifiers
+            unique_parts = []
+            
+            for part in path_parts:
+                # Remove file extensions for analysis
+                clean_part = part.split('.')[0] if '.' in part else part
+                
+                # Skip common/generic path components
+                if clean_part.lower() in ['media', 'audio', 'mp3', 'file', 'download', 'public', 'shows', 'episodes', 'e', 's', 'p', 'open']:
+                    continue
+                
+                # Look for parts that seem like unique identifiers
+                # UUIDs (36 chars with dashes), hashes (32+ chars), or long alphanumeric strings (16+ chars)
+                if (len(clean_part) >= 16 and
+                    (clean_part.replace('-', '').replace('_', '').isalnum())):
+                    unique_parts.append(clean_part)
+            
+            # Use the most unique-looking parts, preferring longer ones
+            if unique_parts:
+                # Sort by length (descending) to get the most unique identifier first
+                unique_parts.sort(key=len, reverse=True)
+                url_identifier = '_'.join(unique_parts[:2])  # Take up to 2 most unique parts
             elif path_parts:
-                # Fallback: use the last part of the path
+                # Fallback: use the last meaningful part
                 filename = path_parts[-1]
-                if '.' in filename:
-                    url_identifier = filename.split('.')[0]  # Remove extension
-                else:
-                    url_identifier = filename
+                url_identifier = filename.split('.')[0] if '.' in filename else filename
             else:
-                # Fallback: use the full path if no clear structure
-                url_identifier = url_path.replace('/', '_')
+                # Final fallback: use the full path
+                url_identifier = url_path.replace('/', '_').replace('.', '_')
             
             # Create a content signature from available metadata and URL
-            # If content-length is 0 or missing, rely more heavily on URL path and other metadata
-            if content_length == '0' or not content_length:
+            # Check if content-length is useful for MP3 files (should be at least 100KB for realistic MP3s)
+            try:
+                content_length_bytes = int(content_length) if content_length else 0
+                is_realistic_size = content_length_bytes >= 100000  # At least 100KB
+            except (ValueError, TypeError):
+                is_realistic_size = False
+            
+            if not content_length or content_length == '0' or not is_realistic_size:
                 # Server doesn't provide useful content-length, use URL path as primary identifier
                 metadata_signature = f"url:{url_identifier}|{last_modified}|{etag}|{content_type}"
             else:
@@ -342,14 +363,38 @@ def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
         links_to_check = mp3_links_with_positions[:dedup_limit]
         
         print(f"  🔍 Performing content-based deduplication on first {len(links_to_check)} of {len(mp3_links_with_positions)} MP3 links...")
+        print(f"  ⚡ Using concurrent requests for faster processing...")
         
         seen_content = set()  # Track content signatures
         unique_links_with_positions = []
         
-        for position, url in links_to_check:
-            # Get metadata for this URL
-            metadata = get_mp3_metadata(url, timeout=10, verify_ssl=verify_ssl)
+        # Use ThreadPoolExecutor for concurrent HEAD requests
+        def get_url_metadata(pos_url_tuple):
+            position, url = pos_url_tuple
+            metadata = get_mp3_metadata(url, timeout=5, verify_ssl=verify_ssl)  # Reduced timeout
+            return position, url, metadata
+        
+        # Process URLs concurrently with up to 8 threads
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            # Submit all tasks
+            future_to_url = {executor.submit(get_url_metadata, pos_url): pos_url for pos_url in links_to_check}
             
+            # Process results as they complete (maintains order by sorting later)
+            results = []
+            for future in as_completed(future_to_url):
+                try:
+                    position, url, metadata = future.result()
+                    results.append((position, url, metadata))
+                except Exception as e:
+                    position, url = future_to_url[future]
+                    print(f"    ⚠️ Error checking {url}: {e}")
+                    results.append((position, url, {'success': False, 'error': str(e)}))
+        
+        # Sort results by original position to maintain order
+        results.sort(key=lambda x: x[0])
+        
+        # Process sorted results for deduplication
+        for position, url, metadata in results:
             if metadata['success']:
                 content_signature = metadata['signature']
                 
@@ -357,16 +402,13 @@ def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
                 if content_signature not in seen_content:
                     seen_content.add(content_signature)
                     unique_links_with_positions.append((position, url))
-                    if metadata['content_length'] == '0' or not metadata['content_length']:
-                        print(f"    ✅ Unique content: {url} (ID: {metadata['url_identifier']})")
-                    else:
-                        print(f"    ✅ Unique content: {url} (size: {metadata['content_length']} bytes)")
+                    # Don't print individual unique content messages - too verbose
                 else:
-                    print(f"    🔄 Duplicate content: {url} (same signature as previous)")
+                    # Overwrite line for duplicate detection
+                    print(f"\r    🔄 Checking: {len(seen_content)} unique, {len(results) - len(unique_links_with_positions)} duplicates...", end="", flush=True)
             else:
-                # If we can't get metadata, include the link anyway but warn
+                # If we can't get metadata, include the link anyway but don't spam output
                 unique_links_with_positions.append((position, url))
-                print(f"    ⚠️ Could not verify: {url} ({metadata['error']}) - including anyway")
 
         # Extract just the URLs in order
         ordered_mp3_links = [url for position, url in unique_links_with_positions]
@@ -378,7 +420,8 @@ def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
         # Reverse order so the last-found MP3 is downloaded first
         ordered_mp3_links = list(reversed(ordered_mp3_links))
 
-        print(f"  📊 Content deduplication result: {len(mp3_links_with_positions)} → {len(ordered_mp3_links)} unique links")
+        # Clear the overwrite line and show final result
+        print(f"\r  📊 Content deduplication result: {len(mp3_links_with_positions)} → {len(ordered_mp3_links)} unique links")
 
         return ordered_mp3_links
 
@@ -503,22 +546,28 @@ def download_mp3_file(
 
             if existing_files:
                 existing = existing_files[0]  # Take first match
-                print(
-                    f"    ⏭ Skipping download (duplicate by hash {url_hash}) -> {existing}"
-                )
+                # Use overwrite for skip messages - don't clutter output
+                print(f"\r    ⏭ Skipping duplicate: {existing}", end="", flush=True)
 
-                # Update tags for existing file if album tagging is enabled
+                # Update tags for existing file if album tagging is enabled (suppress output)
                 tag_success = False
                 if enable_album_tagging and album_name:
-                    print(f"    🏷️ Updating tags for existing file...")
                     existing_filepath = os.path.join(output_dir, existing)
-                    tag_success = update_mp3_tags(
-                        existing_filepath,
-                        album_name,
-                        track_number,
-                        enable_track_tagging,
-                        enable_release_date_tagging,
-                    )
+                    # Temporarily redirect stdout to suppress tag update output for skipped files
+                    import sys
+                    from io import StringIO
+                    old_stdout = sys.stdout
+                    sys.stdout = StringIO()
+                    try:
+                        tag_success = update_mp3_tags(
+                            existing_filepath,
+                            album_name,
+                            track_number,
+                            enable_track_tagging,
+                            enable_release_date_tagging,
+                        )
+                    finally:
+                        sys.stdout = old_stdout
 
                 return {
                     "success": True,
@@ -536,7 +585,8 @@ def download_mp3_file(
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
-        print(f"    📥 Downloading {filename}...")
+        # Use overwrite for download start message
+        print(f"\r    📥 Downloading {filename}...", end="", flush=True)
 
         # Disable SSL warnings if SSL verification is disabled
         if not verify_ssl:
@@ -550,29 +600,45 @@ def download_mp3_file(
         # Download with progress indication for large files
         total_size = int(response.headers.get("content-length", 0))
 
+        def create_progress_bar(progress, width=40):
+            """Create a colored progress bar with Unicode blocks."""
+            filled = int(width * progress / 100)
+            bar = '█' * filled + '░' * (width - filled)
+            # Add colors: green for progress, gray for remaining
+            colored_bar = f'\033[92m{"█" * filled}\033[90m{"░" * (width - filled)}\033[0m'
+            return colored_bar
+
         with open(filepath, "wb") as f:
             if total_size > 0:
                 downloaded = 0
                 show_progress = (
                     total_size > 1024 * 1024
                 )  # Show progress for files > 1MB
+                
+                if show_progress:
+                    print()  # New line for progress bar
+                
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
-                        # Simple progress indication for large files (>1MB)
-                        if show_progress and downloaded % (1024 * 1024) == 0:
+                        # Colored progress bar for large files (>1MB)
+                        if show_progress and downloaded % (256 * 1024) == 0:  # Update every 256KB
                             progress = (downloaded / total_size) * 100
+                            progress_bar = create_progress_bar(progress)
+                            downloaded_mb = downloaded / (1024 * 1024)
+                            total_mb = total_size / (1024 * 1024)
                             print(
-                                f"\r      ⏳ Progress: {progress:.1f}%",
+                                f"\r      {progress_bar} {progress:5.1f}% ({downloaded_mb:.1f}/{total_mb:.1f} MB)",
                                 end="",
                                 flush=True,
                             )
 
                 # Show 100% completion for large files
                 if show_progress:
-                    print(f"\r      ⏳ Progress: 100.0%", end="", flush=True)
-                    print()  # Print newline after progress is complete
+                    progress_bar = create_progress_bar(100)
+                    total_mb = total_size / (1024 * 1024)
+                    print(f"\r      {progress_bar} 100.0% ({total_mb:.1f}/{total_mb:.1f} MB)")
             else:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
@@ -580,7 +646,8 @@ def download_mp3_file(
 
         file_size = os.path.getsize(filepath)
         size_mb = file_size / (1024 * 1024)
-        print(f"    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
+        # Clear overwrite line and show permanent success message
+        print(f"\r    ✅ Downloaded {filename} ({size_mb:.1f} MB)")
 
         # Update MP3 tags with Album name and track number (if enabled)
         tag_success = False
@@ -779,11 +846,15 @@ def download_mp3_files(
                 skipped += 1
                 if result.get("duplicate"):
                     duplicates += 1
+                # Clear any overwrite lines for skipped files
+                print(f"\r", end="")
             else:
                 successful += 1
                 total_size += result.get("size", 0)
         else:
             failed += 1
+            # Clear overwrite line for failed downloads
+            print(f"\r    ❌ Failed to download")
 
     # Clean up old MP3 files that are not in the current set
     cleaned_count = cleanup_old_mp3_files(output_dir, current_filenames)
