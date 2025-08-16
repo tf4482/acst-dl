@@ -203,8 +203,13 @@ def get_mp3_metadata(url, timeout=10, verify_ssl=True):
     """Get metadata for an MP3 URL using HEAD request to identify content."""
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+            "Connection": "keep-alive",
         }
+        
+        # Add small delay to prevent rate limiting
+        time.sleep(0.1)  # 100ms delay between HEAD requests
         
         # Disable SSL warnings if SSL verification is disabled
         if not verify_ssl:
@@ -374,8 +379,8 @@ def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
             metadata = get_mp3_metadata(url, timeout=5, verify_ssl=verify_ssl)  # Reduced timeout
             return position, url, metadata
         
-        # Process URLs concurrently with up to 8 threads
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        # Process URLs concurrently with up to 3 threads to avoid overwhelming DNS/network
+        with ThreadPoolExecutor(max_workers=3) as executor:
             # Submit all tasks
             future_to_url = {executor.submit(get_url_metadata, pos_url): pos_url for pos_url in links_to_check}
             
@@ -904,17 +909,30 @@ def download_html(
     try:
         print(f"🌐 Downloading: {url}")
 
-        # Set headers to mimic a real browser
+        # Set headers to mimic a real browser with more realistic values
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
         }
 
         # Disable SSL warnings if SSL verification is disabled
         if not verify_ssl:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        response = requests.get(
-            url, timeout=timeout, headers=headers, verify=verify_ssl
+        # Add delay to prevent rate limiting issues
+        import time
+        time.sleep(0.5)  # 500ms delay between requests
+
+        # Create session for better connection handling
+        session = requests.Session()
+        session.headers.update(headers)
+
+        response = session.get(
+            url, timeout=timeout, verify=verify_ssl, allow_redirects=True
         )
         response.raise_for_status()  # Raise an exception for bad status codes
 
