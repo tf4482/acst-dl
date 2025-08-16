@@ -198,6 +198,46 @@ def update_mp3_tags(
         return False
 
 
+def get_mp3_metadata(url, timeout=10, verify_ssl=True):
+    """Get metadata for an MP3 URL using HEAD request to identify content."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        
+        # Disable SSL warnings if SSL verification is disabled
+        if not verify_ssl:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        response = requests.head(url, timeout=timeout, headers=headers, verify=verify_ssl, allow_redirects=True)
+        
+        if response.status_code == 200:
+            # Extract key metadata that identifies content
+            content_length = response.headers.get('content-length', '0')
+            last_modified = response.headers.get('last-modified', '')
+            etag = response.headers.get('etag', '')
+            content_type = response.headers.get('content-type', '')
+            
+            # Create a content signature from available metadata
+            # Use content-length as primary identifier, with last-modified and etag as secondary
+            metadata_signature = f"{content_length}|{last_modified}|{etag}|{content_type}"
+            
+            return {
+                'success': True,
+                'content_length': content_length,
+                'last_modified': last_modified,
+                'etag': etag,
+                'content_type': content_type,
+                'signature': metadata_signature,
+                'final_url': response.url  # In case of redirects
+            }
+        else:
+            return {'success': False, 'error': f'HTTP {response.status_code}'}
+            
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
 def generate_filename(url):
     """Generate a safe filename from URL."""
     parsed_url = urlparse(url)
@@ -220,10 +260,10 @@ def generate_filename(url):
     return filename
 
 
-def extract_mp3_links(html_content, base_url, max_links=None):
-    """Extract .mp3 links from content (HTML, RSS, etc.) in order of appearance, with optional limit."""
+def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
+    """Extract .mp3 links from content (HTML, RSS, etc.) in order of appearance, with content-based deduplication and optional limit."""
     mp3_links_with_positions = []
-    seen = set()
+    seen_urls = set()
 
     try:
         # Filter XML parsed as HTML warning for RSS feeds and XML content
@@ -234,10 +274,6 @@ def extract_mp3_links(html_content, base_url, max_links=None):
         all_elements = soup.find_all(["a", "audio", "source"])
 
         for element in all_elements:
-            # Stop if we've reached the maximum number of links
-            if max_links and len(mp3_links_with_positions) >= max_links:
-                break
-
             mp3_url = None
 
             # Check href attribute for <a> tags
@@ -252,37 +288,63 @@ def extract_mp3_links(html_content, base_url, max_links=None):
                 if src.lower().endswith(".mp3"):
                     mp3_url = urljoin(base_url, src)
 
-            # Add to list if found and not already seen
-            if mp3_url and mp3_url not in seen:
-                seen.add(mp3_url)
+            # Add to list if found and not already seen by URL
+            if mp3_url and mp3_url not in seen_urls:
+                seen_urls.add(mp3_url)
                 # Get the position of this element in the original HTML
                 element_position = html_content.find(str(element))
                 mp3_links_with_positions.append((element_position, mp3_url))
 
         # Use regex to find any additional .mp3 URLs in the HTML content
-        # Only if we haven't reached the limit yet
-        if not max_links or len(mp3_links_with_positions) < max_links:
-            mp3_pattern = r'https?://[^\s<>"\']+\.mp3(?:\?[^\s<>"\']*)?'
-            for match in re.finditer(mp3_pattern, html_content, re.IGNORECASE):
-                # Stop if we've reached the maximum number of links
-                if max_links and len(mp3_links_with_positions) >= max_links:
-                    break
+        mp3_pattern = r'https?://[^\s<>"\']+\.mp3(?:\?[^\s<>"\']*)?'
+        for match in re.finditer(mp3_pattern, html_content, re.IGNORECASE):
+            mp3_url = match.group()
+            if mp3_url not in seen_urls:
+                seen_urls.add(mp3_url)
+                mp3_links_with_positions.append((match.start(), mp3_url))
 
-                mp3_url = match.group()
-                if mp3_url not in seen:
-                    seen.add(mp3_url)
-                    mp3_links_with_positions.append((match.start(), mp3_url))
-
-        # Sort by position in HTML and return only the URLs
+        # Sort by position in HTML to maintain order
         mp3_links_with_positions.sort(key=lambda x: x[0])
-        ordered_mp3_links = [url for position, url in mp3_links_with_positions]
+        
+        # Limit content deduplication to max_links * 2 to avoid performance issues on large lists
+        dedup_limit = (max_links * 2) if max_links else len(mp3_links_with_positions)
+        links_to_check = mp3_links_with_positions[:dedup_limit]
+        
+        print(f"  🔍 Performing content-based deduplication on first {len(links_to_check)} of {len(mp3_links_with_positions)} MP3 links...")
+        
+        seen_content = set()  # Track content signatures
+        unique_links_with_positions = []
+        
+        for position, url in links_to_check:
+            # Get metadata for this URL
+            metadata = get_mp3_metadata(url, timeout=10, verify_ssl=verify_ssl)
+            
+            if metadata['success']:
+                content_signature = metadata['signature']
+                
+                # Only include if we haven't seen this content before
+                if content_signature not in seen_content:
+                    seen_content.add(content_signature)
+                    unique_links_with_positions.append((position, url))
+                    print(f"    ✅ Unique content: {url} (size: {metadata['content_length']} bytes)")
+                else:
+                    print(f"    🔄 Duplicate content: {url} (same as previous)")
+            else:
+                # If we can't get metadata, include the link anyway but warn
+                unique_links_with_positions.append((position, url))
+                print(f"    ⚠️ Could not verify: {url} ({metadata['error']}) - including anyway")
 
-        # Apply final limit if specified
+        # Extract just the URLs in order
+        ordered_mp3_links = [url for position, url in unique_links_with_positions]
+
+        # Apply final limit if specified - take from the beginning of the list
         if max_links:
             ordered_mp3_links = ordered_mp3_links[:max_links]
 
         # Reverse order so the last-found MP3 is downloaded first
         ordered_mp3_links = list(reversed(ordered_mp3_links))
+
+        print(f"  📊 Content deduplication result: {len(mp3_links_with_positions)} → {len(ordered_mp3_links)} unique links")
 
         return ordered_mp3_links
 
@@ -764,7 +826,7 @@ def download_html(
         # Extract MP3 links from the downloaded content
         limit_text = f" (limit: {max_mp3_links})" if max_mp3_links else ""
         print(f"  🔍 Extracting MP3 links from {filename}{limit_text}...")
-        mp3_links = extract_mp3_links(response.text, url, max_mp3_links)
+        mp3_links = extract_mp3_links(response.text, url, max_mp3_links, verify_ssl)
 
         mp3_download_stats = {"total": 0, "successful": 0, "failed": 0, "skipped": 0}
 
