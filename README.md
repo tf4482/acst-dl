@@ -11,6 +11,7 @@ A powerful Python-based podcast downloader that extracts and downloads MP3 files
 - **Progress Tracking**: Real-time download progress with detailed logging and emoji indicators
 - **Robust Error Handling**: Comprehensive error messages for network issues, SSL problems, and timeouts
 - **Flexible Configuration**: JSON-based configuration with support for multiple podcast sources
+- **DNS Optimization**: Advanced DNS caching and session reuse to minimize network requests
 - **Browser Simulation**: Uses realistic user-agent headers to avoid blocking
 - **SSL Flexibility**: Option to bypass SSL verification for problematic certificates
 - **Cleanup Features**: Automatic cleanup of old files and temporary content
@@ -64,7 +65,10 @@ Create a configuration file named [`acst-dl-config.json`](acst-dl-config.json) i
   "enable_album_tagging": true,
   "enable_track_tagging": true,
   "enable_release_date_tagging": false,
-  "verify_ssl": true
+  "verify_ssl": true,
+  "enable_dns_caching": true,
+  "max_concurrent_domains": 2,
+  "head_request_timeout": 5
 }
 ```
 
@@ -81,6 +85,9 @@ Create a configuration file named [`acst-dl-config.json`](acst-dl-config.json) i
 | [`enable_track_tagging`](acst-dl-config.json:10)        | Boolean | `false`       | Add track numbers to MP3 files             |
 | [`enable_release_date_tagging`](acst-dl-config.json:11) | Boolean | `false`       | Add release date tags                      |
 | [`verify_ssl`](acst-dl-config.json:12)                  | Boolean | `true`        | Verify SSL certificates                    |
+| [`enable_dns_caching`](acst-dl-config.json:13)          | Boolean | `true`        | Cache DNS results to reduce network requests |
+| [`max_concurrent_domains`](acst-dl-config.json:14)      | Number  | `2`           | Max domains processed concurrently        |
+| [`head_request_timeout`](acst-dl-config.json:15)        | Number  | `5`           | Timeout for HEAD requests (seconds)       |
 
 ## 📖 Usage
 
@@ -137,20 +144,32 @@ Downloaded MP3 files use the format:
 
 ### Duplicate Detection
 
-The tool uses advanced content-based duplicate detection:
+The tool uses advanced content-based duplicate detection with DNS optimization:
 - **URL-based deduplication**: Removes identical URLs during link extraction
 - **Content-based deduplication**: Uses HEAD requests to compare file metadata (size, modification date, ETag)
+- **DNS caching**: Caches DNS results within each run to prevent duplicate lookups
+- **Session reuse**: Groups requests by domain for connection pooling and reduced DNS overhead
 - **Smart URL analysis**: Extracts unique identifiers from URLs when server metadata is insufficient
 - **Performance optimized**: Only checks first `max_mp3_links * 2` files with concurrent processing to avoid delays on large feeds
 - **Multi-service support**: Handles various podcast hosting services (Art19, Libsyn, Anchor, etc.)
 - **Hash-based filename detection**: Prevents re-downloading during subsequent runs
 - Updates tags on existing files if needed
 
+### DNS Optimization
+
+Advanced DNS optimization features to minimize network requests:
+- **Result caching**: Stores HEAD request results in memory to avoid duplicate DNS lookups
+- **Session reuse**: Creates persistent connections grouped by domain for optimal performance
+- **Domain grouping**: Processes all URLs from the same domain together to maximize connection reuse
+- **Concurrent control**: Limits concurrent domain processing to reduce DNS server load
+- **Optimized timeouts**: Uses shorter timeouts for HEAD requests to improve responsiveness
+- **Connection pooling**: Reuses TCP connections for multiple requests to the same domain
+
 #### How Content Deduplication Works
 
 1. **Link Collection**: Extracts all MP3 links from HTML/RSS content
 2. **URL Deduplication**: Removes any identical URLs
-3. **Metadata Checking**: Performs concurrent HEAD requests on up to `max_mp3_links * 2` links (up to 8 simultaneous requests)
+3. **Metadata Checking**: Performs domain-grouped HEAD requests on up to `max_mp3_links * 2` links with DNS optimization
 4. **Smart Content Analysis**:
    - **With file size**: Uses content-length + metadata + URL identifier for signature
    - **Without file size**: Falls back to URL identifier + available metadata (ETag, last-modified)
@@ -217,6 +236,18 @@ To extract MP3 links without downloading:
 }
 ```
 
+### DNS Optimization
+
+For sites with high DNS latency or rate limiting:
+
+```json
+{
+  "enable_dns_caching": true,
+  "max_concurrent_domains": 1,
+  "head_request_timeout": 3
+}
+```
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
@@ -275,26 +306,3 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 - Enable [`enable_album_tagging`](acst-dl-config.json:9) for better music library integration
 - Set [`max_mp3_links`](acst-dl-config.json:7) to avoid downloading entire archives
 - Check the [`output_directory`](acst-dl-config.json:5) permissions before running
-
-## 🔄 Version History
-
-- **v0.2.1**: Enhanced content deduplication for diverse podcast hosting services
-  - **Smart URL analysis**: Extracts unique episode identifiers from URL patterns (Art19 UUIDs, etc.)
-  - **Improved metadata fallback**: Better handling of servers that don't provide content-length headers
-  - **Universal compatibility**: Intelligent URL analysis works with any podcast hosting service
-  - **Concurrent processing**: Up to 8 simultaneous HEAD requests for significantly faster deduplication
-  - **Enhanced logging**: Shows episode IDs and clearer duplicate detection messages
-  - **Reduced timeouts**: Optimized timeout settings for concurrent operations
-
-- **v0.2.0**: Enhanced duplicate detection and extraction improvements
-  - **Content-based duplicate detection**: Uses file metadata (size, modification date, ETag) to identify duplicate content from different URLs
-  - **Performance optimized deduplication**: Limits metadata checking to `max_mp3_links * 2` for faster processing on large feeds
-  - **Improved link extraction**: Collects all MP3 links first, then applies deduplication and limits from the top
-  - Enhanced HEAD request handling with proper SSL and timeout configuration
-
-- **v0.1.0**: Initial release with core downloading functionality
-  - MP3 link extraction from HTML/RSS
-  - Hash-based duplicate detection
-  - MP3 tag management
-  - Organized file storage
-  - Comprehensive error handling
