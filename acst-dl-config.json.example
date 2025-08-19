@@ -6,8 +6,12 @@
   "timeout": 30,
   "max_mp3_links": 5,
   "download_mp3_files": true,
-  "enable_album_tagging": false,
-  "enable_track_tagging": false,
-  "enable_release_date_tagging": false,
-  "verify_ssl": true
+  "enable_album_tagging": true,
+  "enable_track_tagging": true,
+  "enable_release_date_tagging": true,
+  "verify_ssl": false,
+  "_comment_dns_optimization": "DNS optimization settings to reduce network requests",
+  "enable_dns_caching": true,
+  "max_concurrent_domains": 2,
+  "head_request_timeout": 5
 }

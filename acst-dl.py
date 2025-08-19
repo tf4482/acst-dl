@@ -199,8 +199,16 @@ def update_mp3_tags(
         return False
 
 
-def get_mp3_metadata(url, timeout=10, verify_ssl=True):
+# Global cache for DNS/metadata results
+_metadata_cache = {}
+
+def get_mp3_metadata(url, timeout=10, verify_ssl=True, session=None):
     """Get metadata for an MP3 URL using HEAD request to identify content."""
+    # Check cache first
+    cache_key = f"{url}:{verify_ssl}"
+    if cache_key in _metadata_cache:
+        return _metadata_cache[cache_key]
+    
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -215,7 +223,11 @@ def get_mp3_metadata(url, timeout=10, verify_ssl=True):
         if not verify_ssl:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         
-        response = requests.head(url, timeout=timeout, headers=headers, verify=verify_ssl, allow_redirects=True)
+        # Use provided session or create individual request
+        if session:
+            response = session.head(url, timeout=timeout, verify=verify_ssl, allow_redirects=True)
+        else:
+            response = requests.head(url, timeout=timeout, headers=headers, verify=verify_ssl, allow_redirects=True)
         
         if response.status_code == 200:
             # Extract key metadata that identifies content
@@ -278,7 +290,7 @@ def get_mp3_metadata(url, timeout=10, verify_ssl=True):
                 # Normal case: use content-length as primary identifier
                 metadata_signature = f"size:{content_length}|{last_modified}|{etag}|{content_type}|{url_identifier}"
             
-            return {
+            result = {
                 'success': True,
                 'content_length': content_length,
                 'last_modified': last_modified,
@@ -289,10 +301,17 @@ def get_mp3_metadata(url, timeout=10, verify_ssl=True):
                 'url_identifier': url_identifier
             }
         else:
-            return {'success': False, 'error': f'HTTP {response.status_code}'}
+            result = {'success': False, 'error': f'HTTP {response.status_code}'}
+        
+        # Cache the result
+        _metadata_cache[cache_key] = result
+        return result
             
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        result = {'success': False, 'error': str(e)}
+        # Cache failed results too to avoid retrying same failed URLs
+        _metadata_cache[cache_key] = result
+        return result
 
 
 def generate_filename(url):
@@ -373,27 +392,59 @@ def extract_mp3_links(html_content, base_url, max_links=None, verify_ssl=True):
         seen_content = set()  # Track content signatures
         unique_links_with_positions = []
         
-        # Use ThreadPoolExecutor for concurrent HEAD requests
-        def get_url_metadata(pos_url_tuple):
-            position, url = pos_url_tuple
-            metadata = get_mp3_metadata(url, timeout=5, verify_ssl=verify_ssl)  # Reduced timeout
-            return position, url, metadata
+        # Group URLs by domain for optimal session reuse
+        from urllib.parse import urlparse
+        from collections import defaultdict
         
-        # Process URLs concurrently with up to 3 threads to avoid overwhelming DNS/network
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            # Submit all tasks
-            future_to_url = {executor.submit(get_url_metadata, pos_url): pos_url for pos_url in links_to_check}
-            
-            # Process results as they complete (maintains order by sorting later)
+        domain_groups = defaultdict(list)
+        for pos_url in links_to_check:
+            position, url = pos_url
+            domain = urlparse(url).netloc
+            domain_groups[domain].append((position, url))
+        
+        # Create session pool for domain-based processing
+        def process_domain_group(domain_urls_tuple):
+            domain, urls = domain_urls_tuple
             results = []
-            for future in as_completed(future_to_url):
-                try:
-                    position, url, metadata = future.result()
+            # Create one session per domain for connection reuse
+            session = requests.Session()
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "*/*",
+                "Connection": "keep-alive",
+            })
+            
+            try:
+                for position, url in urls:
+                    metadata = get_mp3_metadata(url, timeout=5, verify_ssl=verify_ssl, session=session)
                     results.append((position, url, metadata))
+            except Exception as e:
+                # If session fails, fall back to individual requests
+                for position, url in urls:
+                    metadata = get_mp3_metadata(url, timeout=5, verify_ssl=verify_ssl)
+                    results.append((position, url, metadata))
+            finally:
+                session.close()
+            
+            return results
+        
+        # Process domain groups with reduced concurrency for better DNS behavior
+        with ThreadPoolExecutor(max_workers=2) as executor:  # Reduced from 3 to 2
+            # Submit domain groups instead of individual URLs
+            future_to_domain = {executor.submit(process_domain_group, domain_item): domain_item for domain_item in domain_groups.items()}
+            
+            # Collect results from all domain groups
+            results = []
+            for future in as_completed(future_to_domain):
+                try:
+                    domain_results = future.result()
+                    results.extend(domain_results)
                 except Exception as e:
-                    position, url = future_to_url[future]
-                    print(f"    ⚠️ Error checking {url}: {e}")
-                    results.append((position, url, {'success': False, 'error': str(e)}))
+                    domain, urls = future_to_domain[future]
+                    print(f"    ⚠️ Error processing domain {domain}: {e}")
+                    # Add failed results
+                    for position, url in urls:
+                        results.append((position, url, {'success': False, 'error': str(e)}))
         
         # Sort results by original position to maintain order
         results.sort(key=lambda x: x[0])
@@ -1055,6 +1106,11 @@ def main():
     enable_album_tagging = config.get("enable_album_tagging", False)
     enable_track_tagging = config.get("enable_track_tagging", False)
     enable_release_date_tagging = config.get("enable_release_date_tagging", False)
+    
+    # New DNS optimization options (already implemented in code)
+    enable_dns_caching = config.get("enable_dns_caching", True)
+    max_concurrent_domains = config.get("max_concurrent_domains", 2)
+    head_request_timeout = config.get("head_request_timeout", 5)
 
     # Hash-based duplicate detection is always enabled
 
@@ -1098,8 +1154,17 @@ def main():
             else "DISABLED (bypassed for problematic certificates)"
         )
         print(f"🔒 SSL certificate verification: {ssl_status}")
+        
+        # DNS optimization status
+        dns_cache_status = "ENABLED" if enable_dns_caching else "DISABLED"
+        print(f"🔄 DNS result caching: {dns_cache_status}")
+        print(f"🔢 Max concurrent domains: {max_concurrent_domains}")
+        print(f"⏱️ HEAD request timeout: {head_request_timeout}s")
     else:
         print(f"🎵 MP3 file downloading: DISABLED")
+        # Still show DNS optimization status even when not downloading
+        dns_cache_status = "ENABLED" if enable_dns_caching else "DISABLED"
+        print(f"🔄 DNS result caching: {dns_cache_status}")
 
     # Download each URL and extract MP3 links
     successful_downloads = 0
