@@ -38,6 +38,7 @@ files/*
 .env
 .editorconfig
 .box_pc
+.pytest_cache
 yarn-error.log
 push.bat
 password.*
@@ -55,4 +56,4 @@ ansible.cfg
 acst-dl-config.json
 local_install.bash
 notes.txt
-
+.lck
