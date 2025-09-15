@@ -6,7 +6,7 @@ A powerful Python-based podcast downloader that extracts and downloads MP3 files
 
 - **Multi-source Support**: Download from HTML pages, RSS feeds, and any web content containing MP3 links
 - **Smart Content-Based Duplicate Detection**: Advanced duplicate detection using file metadata and URL analysis prevents re-downloading the same content from different URLs
-- **MP3 Tag Management**: Automatically tag downloaded files with album, track number, and release date information
+- **MP3 Tag Management**: Automatically tag downloaded files with album and release date information
 - **Organized Storage**: Creates structured output directories with subfolders for each podcast source
 - **Progress Tracking**: Real-time download progress with detailed logging and emoji indicators
 - **Robust Error Handling**: Comprehensive error messages for network issues, SSL problems, and timeouts
@@ -63,7 +63,6 @@ Create a configuration file named [`acst-dl-config.json`](acst-dl-config.json) i
   "max_mp3_links": 5,
   "download_mp3_files": true,
   "enable_album_tagging": true,
-  "enable_track_tagging": true,
   "enable_release_date_tagging": false,
   "verify_ssl": true,
   "enable_dns_caching": true,
@@ -82,8 +81,7 @@ Create a configuration file named [`acst-dl-config.json`](acst-dl-config.json) i
 | [`max_mp3_links`](acst-dl-config.json:7)                | Number  | `null`        | Maximum MP3 links to extract per URL       |
 | [`download_mp3_files`](acst-dl-config.json:8)           | Boolean | `false`       | Whether to download MP3 files              |
 | [`enable_album_tagging`](acst-dl-config.json:9)         | Boolean | `false`       | Set album tag to podcast name              |
-| [`enable_track_tagging`](acst-dl-config.json:10)        | Boolean | `false`       | Add track numbers to MP3 files             |
-| [`enable_release_date_tagging`](acst-dl-config.json:11) | Boolean | `false`       | Add release date tags                      |
+| [`enable_release_date_tagging`](acst-dl-config.json:10) | Boolean | `false`       | Add release date tags                      |
 | [`verify_ssl`](acst-dl-config.json:12)                  | Boolean | `true`        | Verify SSL certificates                    |
 | [`enable_dns_caching`](acst-dl-config.json:13)          | Boolean | `true`        | Cache DNS results to reduce network requests |
 | [`max_concurrent_domains`](acst-dl-config.json:14)      | Number  | `2`           | Max domains processed concurrently        |
@@ -192,8 +190,7 @@ This approach effectively handles cases where the same podcast episode is availa
 
 Supports ID3v2 tags:
 - **Album**: Set to podcast name
-- **Track**: Sequential track numbers
-- **Release Date**: Current date with track number as day
+- **Release Date**: Current date
 
 ### Error Handling
 
