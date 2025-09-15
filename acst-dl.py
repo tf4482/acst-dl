@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 import warnings
 import urllib3
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TALB, TRCK, TDRC
+from mutagen.id3 import ID3, TALB, TDRC
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
@@ -61,7 +61,7 @@ def create_output_directory(output_dir):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
 
-def compare_tag_values(current_tags, new_album, new_track=None, new_release_date=None):
+def compare_tag_values(current_tags, new_album, new_release_date=None):
     """Compare current tag values with new values to determine if update is needed."""
     changes_needed = False
     changes = []
@@ -76,18 +76,6 @@ def compare_tag_values(current_tags, new_album, new_track=None, new_release_date
     if current_album != new_album:
         changes_needed = True
         changes.append(f"Album: '{current_album}' → '{new_album}'")
-
-    # Check Track tag (TRCK)
-    if new_track is not None:
-        current_track = None
-        if current_tags and "TRCK" in current_tags:
-            current_track = (
-                str(current_tags["TRCK"].text[0]) if current_tags["TRCK"].text else None
-            )
-
-        if current_track != str(new_track):
-            changes_needed = True
-            changes.append(f"Track: '{current_track}' → '{new_track}'")
 
     # Check Release Date tag (TDRC)
     if new_release_date is not None:
@@ -109,32 +97,26 @@ def compare_tag_values(current_tags, new_album, new_track=None, new_release_date
 def update_mp3_tags(
     filepath,
     album_name,
-    track_number=None,
-    enable_track_tagging=False,
     enable_release_date_tagging=False,
 ):
-    """Update MP3 tags, specifically setting the Album tag to the folder name and optionally the track number and release date."""
+    """Update MP3 tags, specifically setting the Album tag to the folder name and optionally the release date."""
     try:
-        # Calculate release date once if track_number is provided and release date tagging is enabled
+        # Calculate release date if release date tagging is enabled
         release_date = None
-        if track_number is not None and enable_release_date_tagging:
+        if enable_release_date_tagging:
             current_time = time.localtime()
             release_date = (
-                f"{current_time.tm_year}-{current_time.tm_mon:02d}-{track_number:02d}"
+                f"{current_time.tm_year}-{current_time.tm_mon:02d}-{current_time.tm_mday:02d}"
             )
 
         # Build tag info for display
         tag_info = f"Album = '{album_name}'"
-        if track_number is not None and enable_track_tagging:
-            tag_info += f", Track = {track_number}"
-        if track_number is not None and enable_release_date_tagging:
+        if enable_release_date_tagging:
             tag_info += f", Release Date = {release_date}"
 
         # Add disabled status info
         disabled_tags = []
-        if track_number is not None and not enable_track_tagging:
-            disabled_tags.append("Track")
-        if track_number is not None and not enable_release_date_tagging:
+        if not enable_release_date_tagging:
             disabled_tags.append("Release Date")
         if disabled_tags:
             tag_info += f" ({', '.join(disabled_tags)} tagging disabled)"
@@ -150,12 +132,11 @@ def update_mp3_tags(
             print(f"    🏷️ Added new ID3 tags to file")
 
         # Determine which values we want to set
-        new_track = track_number if enable_track_tagging else None
         new_release_date = release_date if enable_release_date_tagging else None
 
         # Compare current tags with new values
         changes_needed, changes = compare_tag_values(
-            audio_file.tags, album_name, new_track, new_release_date
+            audio_file.tags, album_name, new_release_date
         )
 
         if not changes_needed:
@@ -169,22 +150,15 @@ def update_mp3_tags(
         audio_file.tags.delall("TALB")
         audio_file.tags.add(TALB(encoding=3, text=album_name))
 
-        # Set the Track number tag (TRCK) if provided and track tagging is enabled (always overwrite existing)
-        if track_number is not None and enable_track_tagging:
-            audio_file.tags.delall("TRCK")
-            audio_file.tags.add(TRCK(encoding=3, text=str(track_number)))
-
         # Set the Release Date tag (TDRC) if provided and release date tagging is enabled (always overwrite existing)
-        if track_number is not None and enable_release_date_tagging:
+        if enable_release_date_tagging:
             audio_file.tags.delall("TDRC")
             audio_file.tags.add(TDRC(encoding=3, text=release_date))
 
         # Save the changes
         audio_file.save()
         success_msg = f"Successfully updated Album tag to '{album_name}'"
-        if track_number is not None and enable_track_tagging:
-            success_msg += f", Track number to {track_number}"
-        if track_number is not None and enable_release_date_tagging:
+        if enable_release_date_tagging:
             success_msg += f", Release Date to {release_date}"
 
         # Add disabled status to success message
@@ -518,35 +492,6 @@ def save_mp3_links(mp3_links, output_dir, source_url, url_name=None):
         return None
 
 
-def parse_track_numbers_from_txt(txt_filepath):
-    """Parse track numbers from MP3 links text file and return a mapping of URL to track number."""
-    track_mapping = {}
-
-    try:
-        if not os.path.exists(txt_filepath):
-            return track_mapping
-
-        with open(txt_filepath, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        # Look for numbered lines in format "1. http://..." or "1) http://..."
-        for line in lines:
-            line = line.strip()
-            # Match patterns like "1. http://..." or "1) http://..."
-            match = re.match(r"^(\d+)[\.\)]\s+(.+)$", line)
-            if match:
-                track_number = int(match.group(1))
-                url = match.group(2).strip()
-                track_mapping[url] = track_number
-
-        print(
-            f"    📋 Parsed {len(track_mapping)} track numbers from {os.path.basename(txt_filepath)}"
-        )
-        return track_mapping
-
-    except Exception as e:
-        print(f"    ❌ Error parsing track numbers from {txt_filepath}: {e}")
-        return track_mapping
 
 
 def download_mp3_file(
@@ -556,8 +501,6 @@ def download_mp3_file(
     verify_ssl=True,
     album_name=None,
     enable_album_tagging=False,
-    track_number=None,
-    enable_track_tagging=False,
     enable_release_date_tagging=False,
 ):
     """Download a single MP3 file with hash-based duplicate detection across any local filename."""
@@ -618,8 +561,6 @@ def download_mp3_file(
                         tag_success = update_mp3_tags(
                             existing_filepath,
                             album_name,
-                            track_number,
-                            enable_track_tagging,
                             enable_release_date_tagging,
                         )
                     finally:
@@ -711,8 +652,6 @@ def download_mp3_file(
             tag_success = update_mp3_tags(
                 filepath,
                 album_name,
-                track_number,
-                enable_track_tagging,
                 enable_release_date_tagging,
             )
         elif not enable_album_tagging:
@@ -858,8 +797,6 @@ def download_mp3_files(
     verify_ssl=True,
     album_name=None,
     enable_album_tagging=False,
-    track_mapping=None,
-    enable_track_tagging=False,
     enable_release_date_tagging=False,
 ):
     """Download all MP3 files from the provided links with hash-based filename duplicate detection."""
@@ -877,10 +814,7 @@ def download_mp3_files(
     current_filenames = set()  # Track all current hash-based filenames
 
     for i, mp3_url in enumerate(mp3_links, 1):
-        # Get track number from mapping if available
-        track_number = track_mapping.get(mp3_url) if track_mapping else None
-        track_info = f" (Track {track_number})" if track_number else ""
-        print(f"  [{i}/{len(mp3_links)}] {mp3_url}{track_info}")
+        print(f"  [{i}/{len(mp3_links)}] {mp3_url}")
 
         result = download_mp3_file(
             mp3_url,
@@ -889,8 +823,6 @@ def download_mp3_files(
             verify_ssl,
             album_name,
             enable_album_tagging,
-            track_number,
-            enable_track_tagging,
             enable_release_date_tagging,
         )
 
@@ -953,7 +885,6 @@ def download_html(
     verify_ssl=True,
     album_name=None,
     enable_album_tagging=False,
-    enable_track_tagging=False,
     enable_release_date_tagging=False,
 ):
     """Download content from URL and save to file, then extract MP3 links."""
@@ -1014,12 +945,6 @@ def download_html(
 
             # Download MP3 files if enabled
             if download_mp3s:
-                # Parse track numbers from the links file if it exists
-                track_mapping = {}
-                if links_filename:
-                    links_filepath = os.path.join(output_dir, links_filename)
-                    track_mapping = parse_track_numbers_from_txt(links_filepath)
-
                 mp3_download_stats = download_mp3_files(
                     mp3_links,
                     output_dir,
@@ -1027,8 +952,6 @@ def download_html(
                     verify_ssl,
                     album_name,
                     enable_album_tagging,
-                    track_mapping,
-                    enable_track_tagging,
                     enable_release_date_tagging,
                 )
 
@@ -1104,7 +1027,6 @@ def main():
     download_mp3s = config.get("download_mp3_files", False)
     verify_ssl = config.get("verify_ssl", True)
     enable_album_tagging = config.get("enable_album_tagging", False)
-    enable_track_tagging = config.get("enable_track_tagging", False)
     enable_release_date_tagging = config.get("enable_release_date_tagging", False)
     
     # New DNS optimization options (already implemented in code)
@@ -1143,10 +1065,8 @@ def main():
         print(f"🎵 MP3 file downloading: ENABLED")
         print(f"🔐 Hash-based filename duplicate detection: ENABLED")
         album_status = "ENABLED" if enable_album_tagging else "DISABLED"
-        track_status = "ENABLED" if enable_track_tagging else "DISABLED"
         release_date_status = "ENABLED" if enable_release_date_tagging else "DISABLED"
         print(f"🏷️ Album tagging: {album_status}")
-        print(f"🔢 Track number tagging: {track_status}")
         print(f"📅 Release date tagging: {release_date_status}")
         ssl_status = (
             "ENABLED"
@@ -1192,7 +1112,6 @@ def main():
             verify_ssl,
             url_name,  # Pass url_name as album_name
             enable_album_tagging,
-            enable_track_tagging,
             enable_release_date_tagging,
         )
 
