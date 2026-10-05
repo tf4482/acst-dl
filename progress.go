@@ -8,13 +8,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/term"
 )
 
 // Look of the progress line
 const (
-	progressCells    = 20
+	progressCells    = 24
 	progressInterval = 100 * time.Millisecond
 	progressFrames   = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 )
@@ -85,23 +86,58 @@ func (b *progress) animate() {
 	}
 }
 
-// Redraw in place, cut to the terminal width so it never wraps
+// Redraw the progress line within the available terminal width
 func (b *progress) draw() {
 	if b.stop == nil {
 		return
 	}
 	frames := []rune(progressFrames)
-	filled := progressCells * min(b.current, b.total) / max(b.total, 1)
-	text := fmt.Sprintf("%c %s %s%s %d/%d", frames[b.frame%len(frames)], b.label,
-		strings.Repeat("━", filled), strings.Repeat("─", progressCells-filled), b.current, b.total)
+	spinner := string(frames[b.frame%len(frames)])
+	current := max(0, min(b.current, b.total))
+	percent := 100 * current / max(b.total, 1)
+	count := fmt.Sprintf("%d/%d", b.current, b.total)
+	limit := b.width - 1
+
+	// Prioritize the count over the label on narrow terminals
+	if limit < utf8.RuneCountInString(spinner+"  []  100% · "+count)+6 {
+		compact := spinner + " · " + count
+		if space := limit - utf8.RuneCountInString(compact) - 1; space > 0 {
+			label := []rune(b.label)
+			compact = spinner + " " + string(label[:min(len(label), space)]) + " · " + count
+		}
+		text := string([]rune(compact)[:min(utf8.RuneCountInString(compact), max(0, limit))])
+		if b.out.color {
+			text = "\033[" + cyan + "m" + text + "\033[0m"
+		}
+		fmt.Fprint(b.out.out, "\r\033[K"+text)
+		return
+	}
+
+	// Reserve space for the count before fitting the label and bar
+	fixed := utf8.RuneCountInString(spinner + "   []  100% · " + count)
+	label := []rune(b.label)
+	label = label[:min(len(label), 20, max(0, limit-fixed-6))]
+	barWidth := min(progressCells, limit-fixed-len(label))
+	filled := barWidth * current / max(b.total, 1)
+	message := ""
 	if b.message != "" {
-		text += " · " + b.message
+		remaining := limit - fixed - len(label) - barWidth
+		if remaining > 3 {
+			runes := []rune(b.message)
+			message = " · " + string(runes[:min(len(runes), remaining-3)])
+		}
 	}
-	if runes := []rune(text); len(runes) >= b.width {
-		text = string(runes[:b.width-1])
-	}
+
+	prefix := spinner + " " + string(label) + "  ["
+	active := strings.Repeat("█", filled)
+	inactive := strings.Repeat("░", barWidth-filled)
+	suffix := fmt.Sprintf("]  %3d%% · %s%s", percent, count, message)
+	text := prefix + active + inactive + suffix
 	if b.out.color {
-		text = "\033[" + cyan + "m" + text + "\033[0m"
+		text = "\033[" + cyan + "m" + spinner + "\033[0m" + prefix[len(spinner):] +
+			"\033[" + green + "m" + active + "\033[0m" +
+			"\033[2m" + inactive + "\033[0m" +
+			"]  \033[" + cyan + "m" + fmt.Sprintf("%3d%%", percent) + "\033[0m · " + count + message
 	}
 	fmt.Fprint(b.out.out, "\r\033[K"+text)
 }

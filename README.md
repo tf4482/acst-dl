@@ -19,7 +19,7 @@ into one folder per feed, tags them, and exits. Ships as a single static binary.
 - 🔗 **Links only**: optionally writes `links.txt` per feed instead of downloading.
 - 🔓 **TLS bypass**: optional for hosts with broken certificates.
 - 📝 **First run**: creates a user-only config template.
-- 🌈 **Output**: colored with emojis and a progress line; plain when redirected or `NO_COLOR` is set.
+- 🌈 **Output**: colored with emojis and a live progress bar, percentage, and compact terminal mode; plain when redirected or `NO_COLOR` is set.
 
 ## 📦 Install
 
