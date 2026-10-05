@@ -15,7 +15,7 @@ import (
 
 // Look of the progress line
 const (
-	progressCells    = 24
+	progressCells    = 48
 	progressInterval = 100 * time.Millisecond
 	progressFrames   = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 )
