@@ -10,8 +10,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [
 - Parallel feed scans, HEAD probes, and downloads over pooled connections
 - ID3 tagging while streaming, with in-place updates for existing files
 - Partial files renamed only when complete; leftovers removed on the next run
-- Example configuration (`config.yml.example`) and systemd units
+- Example configuration (`config.example.yml`) and systemd units
 - Downloads alternate between feeds and write through a large buffer
+- Live line per finished download and a feed summary with count, size, duration, and speed
 
 ### Changed
 

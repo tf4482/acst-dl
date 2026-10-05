@@ -19,7 +19,7 @@ into one folder per feed, tags them, and exits. Ships as a single static binary.
 - 🔗 **Links only**: optionally writes `links.txt` per feed instead of downloading.
 - 🔓 **TLS bypass**: optional for hosts with broken certificates.
 - 📝 **First run**: creates a user-only config template.
-- 🌈 **Output**: colored with emojis and a live progress bar, percentage, and compact terminal mode; plain when redirected or `NO_COLOR` is set.
+- 🌈 **Output**: colored with emojis, one line per finished download, a summary per feed with count, size, duration, and speed, and a live progress bar; plain when redirected or `NO_COLOR` is set.
 
 ## 📦 Install
 
@@ -71,7 +71,7 @@ The first existing file is used, without merging:
 2. `~/.config/acst-dl/config.yml`
 
 If neither exists, the second one is created with dummy values and the run exits `1`. Copy
-[`config.yml.example`](config.yml.example) to one of these locations and replace `CHANGE_ME`:
+[`config.example.yml`](config.example.yml) to one of these locations and replace `CHANGE_ME`:
 
 | Setting | Description |
 | --- | --- |
