@@ -1,0 +1,10 @@
+[Unit]
+Description=Downloading podcast episodes
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=podcasts
+ExecStart=/usr/local/bin/acst-dl
+TimeoutStartSec=1h

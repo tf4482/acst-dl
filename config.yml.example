@@ -1,0 +1,26 @@
+feeds:
+  # Folder and album name: page or RSS feed containing MP3 links
+  "Example Podcast": "CHANGE_ME"
+
+library:
+  # Absolute path or ~/…; one subfolder per feed
+  directory: "~/Podcasts"
+
+settings:
+  # Newest episodes kept per feed; 0 keeps all
+  max_episodes: 5
+  # false only writes links.txt per feed
+  download_files: true
+  # Album tag set to the feed name
+  tag_album: true
+  # Release date tag set to the download day
+  tag_release_date: false
+  # false accepts broken TLS certificates
+  verify_tls: true
+  # Parallel requests and hard deadline per kind of work
+  feed_concurrency: 4
+  feed_timeout_seconds: 30
+  probe_concurrency: 8
+  probe_timeout_seconds: 5
+  download_concurrency: 4
+  download_timeout_seconds: 900
