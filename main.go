@@ -30,7 +30,8 @@ Behavior:
   episodes by comparing HEAD metadata, and keeps the newest max_episodes.
   Missing episodes are downloaded in parallel into one folder per feed,
   tagged while streaming; episodes already present are not fetched again.
-  Audio files that left the selection are removed from the feed folder.
+  Audio files that left the selection are removed from the feed folder,
+  unless one of the feed's episodes failed.
   With download_files off, only links.txt is written per feed.
 
 Exit codes:
@@ -78,7 +79,7 @@ func execute(ctx context.Context, out printer, config Config) int {
 		return listLinks(out, runs)
 	}
 
-	var downloads []download
+	queues := make([][]download, len(runs))
 	for index := range runs {
 		run := &runs[index]
 		if run.Reason != "" || len(run.Links) == 0 {
@@ -90,10 +91,11 @@ func execute(ctx context.Context, out printer, config Config) int {
 		}
 		for episode := range run.Episodes {
 			if run.Episodes[episode].State == "" {
-				downloads = append(downloads, download{run, &run.Episodes[episode]})
+				queues[index] = append(queues[index], download{run, &run.Episodes[episode]})
 			}
 		}
 	}
+	downloads := interleave(queues)
 
 	if len(downloads) > 0 {
 		out.line("📥", "Downloading "+plural(len(downloads), "episode"), "")
@@ -125,6 +127,23 @@ func execute(ctx context.Context, out printer, config Config) int {
 		return 1
 	}
 	return 0
+}
+
+// Alternate between feeds so parallel downloads spread over hosts
+func interleave(queues [][]download) []download {
+	var mixed []download
+	for round := 0; ; round++ {
+		added := false
+		for _, queue := range queues {
+			if round < len(queue) {
+				mixed = append(mixed, queue[round])
+				added = true
+			}
+		}
+		if !added {
+			return mixed
+		}
+	}
 }
 
 // Tags a feed's episodes should carry
@@ -176,10 +195,14 @@ func finishFeed(out printer, run *FeedRun, tags Tags, sum *totals) {
 		}
 	}
 
-	removed, err := removeStale(run)
-	if err != nil {
-		failed++
-		out.line("⚠️", fmt.Sprintf("%s · old file not removed · %s", name, failureReason(err)), yellow)
+	// Old episodes stay until the new ones are safely there
+	removed := 0
+	if failed == 0 {
+		var err error
+		if removed, err = removeStale(run); err != nil {
+			failed++
+			out.line("⚠️", fmt.Sprintf("%s · old file not removed · %s", name, failureReason(err)), yellow)
+		}
 	}
 	sum.downloaded += downloaded
 	sum.present += present

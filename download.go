@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
@@ -23,6 +24,8 @@ const (
 	// Characters of the link hash that identify an episode on disk
 	hashLength    = 8
 	maxNameLength = 120
+	// Large writes suit network shares
+	writeBuffer = 1 << 20
 
 	// Episode states as printed
 	stateDownloaded = "downloaded"
@@ -66,7 +69,8 @@ func planLibrary(run *FeedRun, started time.Time) error {
 	for index, link := range run.Links {
 		name, hash := episodeName(link)
 		episode := Episode{URL: link, Name: name}
-		present := slices.IndexFunc(run.Library, func(file string) bool { return strings.Contains(file, hash) })
+		ending := "_" + hash + audioSuffix
+		present := slices.IndexFunc(run.Library, func(file string) bool { return strings.HasSuffix(strings.ToLower(file), ending) })
 		if present >= 0 {
 			episode.Filename, episode.State = run.Library[present], statePresent
 		} else {
@@ -91,6 +95,10 @@ func episodeName(link string) (name, hash string) {
 	}
 	if strings.HasSuffix(strings.ToLower(name), audioSuffix) {
 		name = name[:len(name)-len(audioSuffix)]
+	}
+	// Names like media.mp3 say nothing, so use the link's identifier
+	if genericParts[strings.ToLower(name)] {
+		name = linkIdentifier(link)
 	}
 	// Only letters, digits, dots, dashes, and underscores reach the file system
 	name = strings.Map(func(char rune) rune {
@@ -138,7 +146,11 @@ func saveEpisode(ctx context.Context, client *http.Client, link, path string, ta
 	if err != nil {
 		return 0, false, err
 	}
-	size, tagged, err := copyTagged(file, response.Body, tags)
+	writer := bufio.NewWriterSize(file, writeBuffer)
+	size, tagged, err := copyTagged(writer, response.Body, tags)
+	if err == nil {
+		err = writer.Flush()
+	}
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
 	}

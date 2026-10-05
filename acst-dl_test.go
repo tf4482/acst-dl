@@ -217,6 +217,9 @@ func TestContentSignature(t *testing.T) {
 	if name, hash := episodeName("https://a.example/podcast/2026%2F08%2Fep 120.MP3?x=1"); name != "ep_120" || len(hash) != hashLength {
 		t.Fatalf("unexpected name: %q %q", name, hash)
 	}
+	if name, _ := episodeName("https://a.example/episodes/0123456789abcdef0123/media.mp3"); name != "0123456789abcdef0123" {
+		t.Fatalf("generic name kept: %q", name)
+	}
 }
 
 func TestCopyTaggedRewritesLeadingTag(t *testing.T) {
@@ -391,6 +394,8 @@ func TestFailuresKeepTheLibraryClean(t *testing.T) {
 	config := testConfig(t.TempDir(), server.URL+"/stall.xml")
 	config.Feeds = append(config.Feeds, Feed{"Offline", server.URL + "/missing.xml"})
 	config.Settings.DownloadTimeout = 300 * time.Millisecond
+	feedDir := filepath.Join(config.Directory, "News")
+	writeFile(t, filepath.Join(feedDir, "old-episode.mp3"), "old")
 
 	var output bytes.Buffer
 	started := time.Now()
@@ -402,7 +407,8 @@ func TestFailuresKeepTheLibraryClean(t *testing.T) {
 		!strings.Contains(output.String(), "Offline · feed · http 404") {
 		t.Fatalf("exit %d: %s", code, output.String())
 	}
-	if entries, _ := os.ReadDir(filepath.Join(config.Directory, "News")); len(entries) != 0 {
-		t.Fatalf("partial file kept: %v", entries)
+	// Only the old episode remains: no partial file, nothing removed
+	if entries, _ := os.ReadDir(feedDir); len(entries) != 1 || entries[0].Name() != "old-episode.mp3" {
+		t.Fatalf("unexpected folder: %v", entries)
 	}
 }

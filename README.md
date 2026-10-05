@@ -7,14 +7,14 @@ into one folder per feed, tags them, and exits. Ships as a single static binary.
 
 - 🌐 **Any source**: RSS feeds, HTML pages, or any content with MP3 links in tags or plain text.
 - ⚡ **Parallel**: feeds, HEAD probes, and downloads run concurrently over pooled connections, each
-  with its own limit and hard deadline.
+  with its own limit and hard deadline; downloads alternate between feeds to spread over hosts.
 - 🧬 **Mirror detection**: links with the same size and ETag or Last-Modified, or the same identifier
   in their path, count as one episode.
 - ⏭️ **No re-downloads**: an 8-character link hash in the file name marks episodes already present.
 - 🏷️ **Tagging**: album (feed name) and release date (download day) are written into the ID3 tag while
   streaming; existing files are corrected when their tags differ.
 - 🧹 **Tidy library**: keeps the newest `max_episodes` per feed and removes audio files that left the
-  selection.
+  selection, but only when all of the feed's episodes succeeded.
 - 🛡️ **Safe writes**: episodes are written as `.part` and renamed when complete; leftovers are removed.
 - 🔗 **Links only**: optionally writes `links.txt` per feed instead of downloading.
 - 🔓 **TLS bypass**: optional for hosts with broken certificates.
@@ -43,8 +43,8 @@ sudo install -m 755 dist/acst-dl /usr/local/bin/acst-dl
 
 File names are `<download time>_<name from link>_<link hash>.mp3`; within a run the newest episode
 gets the latest time, so files sort in feed order. Every `.mp3` in a feed folder that is not part of
-the current selection is deleted, so keep other audio out of these folders. Feeds without links and
-failed feeds leave their folder untouched.
+the current selection is deleted, so keep other audio out of these folders. Feeds without links,
+failed feeds, and feeds with a failed episode delete nothing.
 
 ## 🔁 Migrating from the Python version
 
