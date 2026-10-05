@@ -42,7 +42,9 @@ type FeedRun struct {
 	Links     []string // candidates in page order, then the selection oldest first
 	Library   []string // audio files present before downloading
 	Episodes  []Episode
-	Reason    string // why the feed failed
+	Reason    string    // why the feed failed
+	Pending   int       // downloads not yet through
+	Began     time.Time // start of the first download
 }
 
 var (

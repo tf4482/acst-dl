@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -39,6 +40,9 @@ Exit codes:
   1    Configuration, feed, download, or file error
   130  Interrupted by the user
 `
+
+// Feed summary color
+const boldGreen = "1;" + green
 
 // Counters for the closing line
 type totals struct {
@@ -79,20 +83,23 @@ func execute(ctx context.Context, out printer, config Config) int {
 		return listLinks(out, runs)
 	}
 
+	var sum totals
 	queues := make([][]download, len(runs))
 	for index := range runs {
 		run := &runs[index]
-		if run.Reason != "" || len(run.Links) == 0 {
-			continue
-		}
-		if err := planLibrary(run, started); err != nil {
-			run.Reason = failureReason(err)
-			continue
+		if run.Reason == "" && len(run.Links) > 0 {
+			if err := planLibrary(run, started); err != nil {
+				run.Reason = failureReason(err)
+			}
 		}
 		for episode := range run.Episodes {
-			if run.Episodes[episode].State == "" {
+			if run.Reason == "" && run.Episodes[episode].State == "" {
 				queues[index] = append(queues[index], download{run, &run.Episodes[episode]})
 			}
+		}
+		// Feeds with nothing to fetch report right away
+		if run.Pending = len(queues[index]); run.Pending == 0 {
+			finishFeed(out.line, run, feedTags(run.Feed, settings, started), &sum)
 		}
 	}
 	downloads := interleave(queues)
@@ -101,21 +108,37 @@ func execute(ctx context.Context, out printer, config Config) int {
 		out.line("📥", "Downloading "+plural(len(downloads), "episode"), "")
 	}
 	bar := out.progress("Downloading", len(downloads))
+	var mutex sync.Mutex
 	parallel(ctx, len(downloads), settings.DownloadConcurrency, func(index int) {
-		item := downloads[index]
-		downloadEpisode(ctx, client, item.episode, item.run.Directory,
-			feedTags(item.run.Feed, settings, started), settings.DownloadTimeout)
-		bar.step(item.run.Feed.Name + " · " + item.episode.Name)
+		run, episode := downloads[index].run, downloads[index].episode
+		tags := feedTags(run.Feed, settings, started)
+		mutex.Lock()
+		if run.Began.IsZero() {
+			run.Began = time.Now()
+		}
+		mutex.Unlock()
+
+		began := time.Now()
+		downloadEpisode(ctx, client, episode, run.Directory, tags, settings.DownloadTimeout)
+		episode.Took = time.Since(began)
+		bar.step(run.Feed.Name + " · " + episode.Name)
+		if ctx.Err() != nil {
+			return
+		}
+
+		// One line per download, then the feed summary after its last one
+		mutex.Lock()
+		defer mutex.Unlock()
+		bar.line(episodeLine(run.Feed.Name, episode))
+		if run.Pending--; run.Pending == 0 {
+			finishFeed(bar.line, run, tags, &sum)
+		}
 	})
 	bar.done()
 	if ctx.Err() != nil {
 		return 130
 	}
 
-	var sum totals
-	for index := range runs {
-		finishFeed(out, &runs[index], feedTags(runs[index].Feed, settings, started), &sum)
-	}
 	icon, color, verdict := "✅", green, "Done"
 	if sum.failed {
 		icon, color, verdict = "⚠️", yellow, "Done with errors"
@@ -158,40 +181,56 @@ func feedTags(feed Feed, settings Settings, started time.Time) Tags {
 	return tags
 }
 
-// Retag present files, remove stale ones, and print the feed's lines
-func finishFeed(out printer, run *FeedRun, tags Tags, sum *totals) {
+// Permanent line above the live progress bar
+func (b *progress) line(icon, text, color string) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	if b.stop != nil {
+		fmt.Fprint(b.out.out, "\r\033[K")
+	}
+	b.out.line(icon, text, color)
+	b.draw()
+}
+
+// Output line of one finished download
+func episodeLine(name string, episode *Episode) (icon, text, color string) {
+	if episode.State != stateDownloaded {
+		return "❌", fmt.Sprintf("%s · %s · %s · %s", name, episode.Name, stateFailed, episode.Reason), red
+	}
+	text = fmt.Sprintf("%s · %s · %s · %s", name, episode.Name, episode.State, pace(episode.Size, episode.Took))
+	if episode.Untagged {
+		return "⚠️", text + " · untagged, unsupported ID3 tag", yellow
+	}
+	return "✅", text, green
+}
+
+// Retag present files, remove stale ones, and print the feed summary
+func finishFeed(say func(icon, text, color string), run *FeedRun, tags Tags, sum *totals) {
 	name := run.Feed.Name
 	if run.Reason != "" {
 		sum.failed = true
-		out.line("❌", fmt.Sprintf("%s · feed · %s", name, run.Reason), red)
+		say("❌", fmt.Sprintf("%s · feed · %s", name, run.Reason), red)
 		return
 	}
 	if len(run.Links) == 0 {
-		out.line("⚠️", name+" · no MP3 links found", yellow)
+		say("⚠️", name+" · no MP3 links found", yellow)
 		return
 	}
 
-	downloaded, present, failed := 0, 0, 0
+	downloaded, present, failed, size := 0, 0, 0, int64(0)
 	for _, episode := range run.Episodes {
 		switch episode.State {
 		case statePresent:
 			present++
 			if _, err := retagFile(filepath.Join(run.Directory, episode.Filename), tags); err != nil {
 				failed++
-				out.line("⚠️", fmt.Sprintf("%s · %s · tags not updated · %s", name, episode.Name, failureReason(err)), yellow)
+				say("⚠️", fmt.Sprintf("%s · %s · tags not updated · %s", name, episode.Name, failureReason(err)), yellow)
 			}
 		case stateDownloaded:
 			downloaded++
-			sum.bytes += episode.Size
-			if episode.Untagged {
-				out.line("⚠️", fmt.Sprintf("%s · %s · %s · %s · untagged, unsupported ID3 tag",
-					name, episode.Name, episode.State, megabytes(episode.Size)), yellow)
-			} else {
-				out.line("✅", fmt.Sprintf("%s · %s · %s · %s", name, episode.Name, episode.State, megabytes(episode.Size)), green)
-			}
+			size += episode.Size
 		default:
 			failed++
-			out.line("❌", fmt.Sprintf("%s · %s · %s · %s", name, episode.Name, stateFailed, episode.Reason), red)
 		}
 	}
 
@@ -201,27 +240,31 @@ func finishFeed(out printer, run *FeedRun, tags Tags, sum *totals) {
 		var err error
 		if removed, err = removeStale(run); err != nil {
 			failed++
-			out.line("⚠️", fmt.Sprintf("%s · old file not removed · %s", name, failureReason(err)), yellow)
+			say("⚠️", fmt.Sprintf("%s · old file not removed · %s", name, failureReason(err)), yellow)
 		}
 	}
 	sum.downloaded += downloaded
 	sum.present += present
 	sum.removed += removed
+	sum.bytes += size
 
-	icon, color := "✅", green
+	icon, color := "🎙️", boldGreen
 	if failed > 0 {
 		sum.failed = true
 		icon, color = "⚠️", yellow
 	}
-	fields := []string{name, fmt.Sprintf("%d of %s", len(run.Episodes), plural(run.Found, "link")),
-		fmt.Sprintf("%d downloaded", downloaded), fmt.Sprintf("%d present", present)}
+	fields := []string{name, fmt.Sprintf("%d of %s", len(run.Episodes), plural(run.Found, "link"))}
+	if downloaded > 0 {
+		fields = append(fields, fmt.Sprintf("⬇️ %d downloaded", downloaded), pace(size, time.Since(run.Began)))
+	}
+	fields = append(fields, fmt.Sprintf("📁 %d present", present))
 	if removed > 0 {
-		fields = append(fields, fmt.Sprintf("%d removed", removed))
+		fields = append(fields, fmt.Sprintf("🧹 %d removed", removed))
 	}
 	if failed > 0 {
 		fields = append(fields, fmt.Sprintf("%d failed", failed))
 	}
-	out.line(icon, strings.Join(fields, " · "), color)
+	say(icon, strings.Join(fields, " · "), color)
 }
 
 // Links-only mode: one links.txt per feed
@@ -253,6 +296,12 @@ func plural(count int, noun string) string {
 		return "1 " + noun
 	}
 	return fmt.Sprintf("%d %ss", count, noun)
+}
+
+// Size, duration, and average speed of finished downloads
+func pace(size int64, took time.Duration) string {
+	return fmt.Sprintf("📦 %s · ⏱️ %s · ⚡ %s/s", megabytes(size), took.Round(100*time.Millisecond),
+		megabytes(int64(float64(size)/max(took.Seconds(), 0.001))))
 }
 
 func megabytes(size int64) string {

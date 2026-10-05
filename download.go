@@ -42,6 +42,7 @@ type Episode struct {
 	Reason   string
 	Size     int64
 	Untagged bool // saved without the wanted tags
+	Took     time.Duration
 }
 
 // Create the feed folder and match the selection against its files
