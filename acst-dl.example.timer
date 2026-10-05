@@ -1,0 +1,9 @@
+[Unit]
+Description=Timing podcast episode downloads
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=1h
+
+[Install]
+WantedBy=timers.target
