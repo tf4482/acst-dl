@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Must match config.yml.example
+// Must match config.example.yml
 const defaultConfig = `feeds:
   "Example Podcast": "CHANGE_ME"
 
