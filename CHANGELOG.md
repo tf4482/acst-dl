@@ -2,17 +2,7 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
-### Changed
-
-- Query parameters such as tokens no longer change the link hash, unless the file name is generic;
-  episodes found under such links are fetched once more
-- Only the tool's own episode files are removed from feed folders; other audio stays untouched
-- Retagging and cleanup of a finished feed no longer hold up the other downloads
-- Banner shows 🚀 in a correctly sized frame
-
-## [0.1.0] - 2026-10-05
+## [0.1.0] - 2026-10-22
 
 ### Added
 
@@ -31,6 +21,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [
 - HTML entities in links are decoded, and links with a query string are found in tag attributes
 - Existing files keep their release date; only new downloads get the current day
 - Old episodes are only removed when all of the feed's episodes succeeded
+- Only the tool's own episode files are removed from feed folders; other audio stays untouched
+- Query parameters such as tokens no longer change the link hash, unless the file name is generic
 - Files named like `media.mp3` take the identifier from their link as name
 - Links-only mode writes a single `links.txt` per feed and no page copy
 
