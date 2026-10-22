@@ -127,14 +127,14 @@ func TestFirstRunCreatesTemplate(t *testing.T) {
 		t.Fatalf("unedited template accepted: %v", err)
 	}
 
-	example, err := os.ReadFile("config.yml.example")
+	example, err := os.ReadFile("config.example.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var fromExample, fromDefault any
 	if yaml.Unmarshal(example, &fromExample) != nil || yaml.Unmarshal([]byte(defaultConfig), &fromDefault) != nil ||
 		fmt.Sprint(fromExample) != fmt.Sprint(fromDefault) {
-		t.Fatal("config.yml.example differs from the embedded template")
+		t.Fatal("config.example.yml differs from the embedded template")
 	}
 }
 
