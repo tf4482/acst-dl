@@ -2,7 +2,7 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-22
 
 ### Added
 
@@ -10,13 +10,13 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [
 - Present files named after their download time are renamed to their release date
 - A missing title tag is filled with the episode title from the feed
 
-### Fixed
-
-- Episodes with an ID3 tag above 32 MiB, e.g. from chapter images, are tagged instead of reported as unsupported; tag frames are written without copying them
-
 ### Changed
 
 - With `tag_release_date`, the date tag holds the release date and time from the feed; the download day only fills a missing date and never replaces the episode's own one
+
+### Fixed
+
+- Episodes with an ID3 tag above 32 MiB, e.g. from chapter images, are tagged instead of reported as unsupported; tag frames are written without copying them
 
 ## [0.1.0] - 2026-10-22
 
