@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf16"
 )
 
@@ -28,7 +29,10 @@ const (
 // Wanted tag values; empty ones are left alone
 type Tags struct {
 	Album string
-	Date  string // YYYY-MM-DD
+	Title string    // only fills a missing title
+	Date  time.Time // release moment
+	// Date is the feed's release date and replaces any other; otherwise it only fills a missing date
+	Published bool
 }
 
 // Raw ID3v2 frame, kept verbatim unless replaced
@@ -67,7 +71,7 @@ func copyTagged(destination io.Writer, source io.Reader, tags Tags) (written int
 	}
 	tag, supported := parseID3(leading)
 	if supported {
-		tag.apply(tags, true)
+		tag.apply(tags)
 		leading = tag.serialize(id3Padding)
 	}
 	if _, err := destination.Write(leading); err != nil {
@@ -101,7 +105,7 @@ func retagFile(path string, tags Tags) (bool, error) {
 		return false, err
 	}
 	tag, supported := parseID3(leading)
-	if !supported || !tag.apply(tags, false) {
+	if !supported || !tag.apply(tags) {
 		return false, nil
 	}
 
@@ -218,27 +222,44 @@ func synchsafe(data []byte) int {
 	return int(data[0]&0x7F)<<21 | int(data[1]&0x7F)<<14 | int(data[2]&0x7F)<<7 | int(data[3]&0x7F)
 }
 
-// Set the wanted values; an existing date survives unless overwrite is set
-func (t *id3Tag) apply(tags Tags, overwrite bool) bool {
+// Set the wanted values; true when anything changed
+func (t *id3Tag) apply(tags Tags) bool {
 	changed := false
-	if tags.Album != "" && t.text("TALB") != tags.Album {
-		t.setText("TALB", tags.Album)
-		changed = true
+	set := func(id, value string) {
+		if t.text(id) != value {
+			t.setText(id, value)
+			changed = true
+		}
 	}
-	if tags.Date == "" {
+	if tags.Album != "" {
+		set("TALB", tags.Album)
+	}
+	if tags.Title != "" && t.text("TIT2") == "" {
+		set("TIT2", tags.Title)
+	}
+	if tags.Date.IsZero() {
 		return changed
 	}
 	if t.version == 4 {
-		if current := t.text("TDRC"); current == "" || overwrite && current != tags.Date {
-			t.setText("TDRC", tags.Date)
+		// Exact moment only from the feed; the download day is just a day
+		value := tags.Date.Format("2006-01-02")
+		if tags.Published {
+			value = tags.Date.Format("2006-01-02T15:04:05")
+		}
+		if tags.Published || t.text("TDRC") == "" {
+			set("TDRC", value)
+		}
+	} else if tags.Published || t.text("TYER") == "" {
+		// Version 3 splits the date into year, DDMM, and HHMM
+		if slices.ContainsFunc(t.frames, func(frame id3Frame) bool { return frame.id == "TDRC" }) {
+			t.remove("TDRC")
 			changed = true
 		}
-	} else if overwrite || t.text("TYER") == "" {
-		// Version 3 splits the date into year and DDMM
-		t.remove("TDRC")
-		t.setText("TYER", tags.Date[:4])
-		t.setText("TDAT", tags.Date[8:10]+tags.Date[5:7])
-		changed = true
+		set("TYER", tags.Date.Format("2006"))
+		set("TDAT", tags.Date.Format("0201"))
+		if tags.Published {
+			set("TIME", tags.Date.Format("1504"))
+		}
 	}
 	return changed
 }

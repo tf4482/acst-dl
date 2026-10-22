@@ -31,6 +31,9 @@ Behavior:
   episodes by comparing HEAD metadata, and keeps the newest max_episodes.
   Missing episodes are downloaded in parallel into one folder per feed,
   tagged while streaming; episodes already present are not fetched again.
+  The release date of each RSS item names the file, sets its file time
+  and, with tag_release_date, its date tag; a missing title comes from
+  the feed. Without a date the download time stands in.
   Episode files that left the selection are removed from the feed folder,
   unless one of the feed's episodes failed.
   With download_files off, only links.txt is written per feed.
@@ -99,7 +102,7 @@ func execute(ctx context.Context, out printer, config Config) int {
 		}
 		// Feeds with nothing to fetch report right away
 		if run.Pending = len(queues[index]); run.Pending == 0 {
-			sum.add(finishFeed(out.line, run, feedTags(run.Feed, settings, started)))
+			sum.add(finishFeed(out.line, run, settings, started))
 		}
 	}
 	downloads := interleave(queues)
@@ -111,7 +114,7 @@ func execute(ctx context.Context, out printer, config Config) int {
 	var mutex sync.Mutex
 	parallel(ctx, len(downloads), settings.DownloadConcurrency, func(index int) {
 		run, episode := downloads[index].run, downloads[index].episode
-		tags := feedTags(run.Feed, settings, started)
+		tags := episodeTags(run.Feed, settings, started, episode)
 		began := time.Now()
 		downloadEpisode(ctx, client, episode, run.Directory, tags, settings.DownloadTimeout)
 		episode.Took = time.Since(began)
@@ -133,7 +136,7 @@ func execute(ctx context.Context, out printer, config Config) int {
 			return
 		}
 		// File work runs unlocked so other downloads keep going
-		feed := finishFeed(bar.line, run, tags)
+		feed := finishFeed(bar.line, run, settings, started)
 		mutex.Lock()
 		sum.add(feed)
 		mutex.Unlock()
@@ -182,14 +185,17 @@ func interleave(queues [][]download) []download {
 	}
 }
 
-// Tags a feed's episodes should carry
-func feedTags(feed Feed, settings Settings, started time.Time) Tags {
-	var tags Tags
+// Tags an episode should carry; the feed's release date wins over the download day
+func episodeTags(feed Feed, settings Settings, started time.Time, episode *Episode) Tags {
+	tags := Tags{Title: episode.Title}
 	if settings.TagAlbum {
 		tags.Album = feed.Name
 	}
 	if settings.TagReleaseDate {
-		tags.Date = started.Format("2006-01-02")
+		tags.Date, tags.Published = started, !episode.Published.IsZero()
+		if tags.Published {
+			tags.Date = episode.Published.Local()
+		}
 	}
 	return tags
 }
@@ -218,7 +224,7 @@ func episodeLine(name string, episode *Episode) (icon, text, color string) {
 }
 
 // Retag present files, remove stale ones, and print the feed summary
-func finishFeed(say func(icon, text, color string), run *FeedRun, tags Tags) (sum totals) {
+func finishFeed(say func(icon, text, color string), run *FeedRun, settings Settings, started time.Time) (sum totals) {
 	name := run.Feed.Name
 	if run.Reason != "" {
 		say("❌", fmt.Sprintf("%s · feed · %s", name, run.Reason), red)
@@ -230,14 +236,17 @@ func finishFeed(say func(icon, text, color string), run *FeedRun, tags Tags) (su
 	}
 
 	downloaded, present, failed, size := 0, 0, 0, int64(0)
-	for _, episode := range run.Episodes {
+	for index := range run.Episodes {
+		episode := &run.Episodes[index]
 		switch episode.State {
 		case statePresent:
 			present++
-			if _, err := retagFile(filepath.Join(run.Directory, episode.Filename), tags); err != nil {
+			path := filepath.Join(run.Directory, episode.Filename)
+			if _, err := retagFile(path, episodeTags(run.Feed, settings, started, episode)); err != nil {
 				failed++
 				say("⚠️", fmt.Sprintf("%s · %s · tags not updated · %s", name, episode.Name, failureReason(err)), yellow)
 			}
+			stamp(path, episode.Published)
 		case stateDownloaded:
 			downloaded++
 			size += episode.Size

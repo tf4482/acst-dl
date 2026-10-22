@@ -235,7 +235,8 @@ func TestContentSignature(t *testing.T) {
 
 func TestCopyTaggedRewritesLeadingTag(t *testing.T) {
 	audio := []byte("\xFF\xFBaudio-frames")
-	tags := Tags{Album: "Näws", Date: "2026-10-05"}
+	release := time.Date(2026, 10, 5, 6, 30, 0, 0, time.Local)
+	tags := Tags{Album: "Näws", Title: "Feed title", Date: release, Published: true}
 	old := id3Tag{version: 3}
 	old.setText("TIT2", "Title")
 	old.setText("TALB", "Old")
@@ -251,11 +252,12 @@ func TestCopyTaggedRewritesLeadingTag(t *testing.T) {
 		if !bytes.Equal(data[id3Length(data):], audio) || tag.text("TALB") != "Näws" {
 			t.Fatalf("%s: unexpected result %q", name, data)
 		}
-		if tag.version == 3 && (tag.text("TIT2") != "Title" || tag.text("TYER") != "2026" || tag.text("TDAT") != "0510") {
+		// The file's own title wins, the feed's fills a missing one
+		if tag.version == 3 && (tag.text("TIT2") != "Title" || tag.text("TYER") != "2026" || tag.text("TDAT") != "0510" || tag.text("TIME") != "0630") {
 			t.Fatalf("%s: version 3 frames wrong: %+v", name, tag)
 		}
-		if tag.version == 4 && tag.text("TDRC") != "2026-10-05" {
-			t.Fatalf("%s: date missing", name)
+		if tag.version == 4 && (tag.text("TDRC") != "2026-10-05T06:30:00" || tag.text("TIT2") != "Feed title") {
+			t.Fatalf("%s: date or title missing: %+v", name, tag)
 		}
 	}
 
@@ -283,20 +285,28 @@ func TestRetagFile(t *testing.T) {
 	audio := []byte("\xFF\xFBaudio-frames")
 	writeFile(t, path, string(audio))
 
+	day := func(year int) time.Time { return time.Date(year, 10, 5, 0, 0, 0, 0, time.Local) }
 	// No tag yet, so the file is rewritten
-	if changed, err := retagFile(path, Tags{Album: "News", Date: "2026-10-05"}); err != nil || !changed {
+	if changed, err := retagFile(path, Tags{Album: "News", Date: day(2026)}); err != nil || !changed {
 		t.Fatalf("first retag: %v %v", changed, err)
 	}
-	// Padding takes the longer album in place; the date stays
-	if changed, err := retagFile(path, Tags{Album: "Daily News", Date: "2027-01-01"}); err != nil || !changed {
+	// Padding takes the longer album in place; a download day never replaces a date
+	if changed, err := retagFile(path, Tags{Album: "Daily News", Date: day(2027)}); err != nil || !changed {
 		t.Fatalf("second retag: %v %v", changed, err)
 	}
-	if changed, err := retagFile(path, Tags{Album: "Daily News", Date: "2027-01-01"}); err != nil || changed {
+	if changed, err := retagFile(path, Tags{Album: "Daily News", Date: day(2027)}); err != nil || changed {
 		t.Fatalf("current tags rewritten: %v %v", changed, err)
 	}
 	tag, rest := readTag(t, path)
 	if tag.text("TALB") != "Daily News" || tag.text("TDRC") != "2026-10-05" || !bytes.Equal(rest, audio) {
 		t.Fatalf("unexpected file: %+v %q", tag, rest)
+	}
+	// The feed's release date does
+	if changed, err := retagFile(path, Tags{Album: "Daily News", Date: day(2025), Published: true}); err != nil || !changed {
+		t.Fatalf("release date retag: %v %v", changed, err)
+	}
+	if tag, _ := readTag(t, path); tag.text("TDRC") != "2025-10-05T00:00:00" {
+		t.Fatalf("release date not written: %+v", tag)
 	}
 }
 
@@ -319,6 +329,12 @@ func podcastServer(t *testing.T, downloads *atomic.Int32) *httptest.Server {
 	}
 	mux.HandleFunc("/media/", episode)
 	mux.HandleFunc("/mirror/", episode)
+	mux.HandleFunc("/rss.xml", func(w http.ResponseWriter, r *http.Request) {
+		for index, day := range []string{"Tue, 6 Oct 2026 07:00:00 +0000", "Mon, 05 Oct 2026 07:00:00 +0000"} {
+			fmt.Fprintf(w, "<item><title><![CDATA[Episode &%d]]></title><pubDate>%s</pubDate>"+
+				"<enclosure url=\"http://%s/media/ep%d.mp3\"/></item>\n", 2-index, day, r.Host, 2-index)
+		}
+	})
 	mux.HandleFunc("/stall.xml", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "<enclosure url=\"http://%s/stall/slow.mp3\"/>", r.Host)
 	})
@@ -423,5 +439,33 @@ func TestFailuresKeepTheLibraryClean(t *testing.T) {
 	// Only the old episode remains: no partial file, nothing removed
 	if entries, _ := os.ReadDir(feedDir); len(entries) != 1 || entries[0].Name() != oldEpisode {
 		t.Fatalf("unexpected folder: %v", entries)
+	}
+}
+
+func TestReleaseDatesOrderTheLibrary(t *testing.T) {
+	var downloads atomic.Int32
+	server := podcastServer(t, &downloads)
+	config := testConfig(t.TempDir(), server.URL+"/rss.xml")
+	config.Settings.TagReleaseDate = true
+	feedDir := filepath.Join(config.Directory, "News")
+	// Present under its download-time name
+	_, hash := episodeName(server.URL + "/media/ep1.mp3")
+	writeFile(t, filepath.Join(feedDir, "2026-10-22-120000000000_ep1_"+hash+audioSuffix), "\xFF\xFBold")
+
+	var output bytes.Buffer
+	if code := execute(context.Background(), printer{out: &output}, config); code != 0 || downloads.Load() != 1 {
+		t.Fatalf("exit %d, %d downloads: %s", code, downloads.Load(), output.String())
+	}
+	files := audioFiles(t, feedDir)
+	released := time.Date(2026, 10, 6, 7, 0, 0, 0, time.UTC).Local()
+	if len(files) != 2 || !strings.HasPrefix(filepath.Base(files[0]), "2026-10-05-") ||
+		!strings.HasPrefix(filepath.Base(files[1]), released.Format("2006-01-02-150405")) {
+		t.Fatalf("not named by release date: %v", files)
+	}
+	tag, _ := readTag(t, files[1])
+	info, err := os.Stat(files[1])
+	if tag.text("TDRC") != released.Format("2006-01-02T15:04:05") || tag.text("TIT2") != "Episode &2" ||
+		err != nil || !info.ModTime().Equal(released) {
+		t.Fatalf("unexpected episode: %+v %v %v", tag, info.ModTime(), err)
 	}
 }

@@ -38,16 +38,34 @@ const (
 type FeedRun struct {
 	Feed      Feed
 	Directory string
-	Found     int      // distinct links in the feed
-	Links     []string // candidates in page order, then the selection oldest first
-	Library   []string // audio files present before downloading
+	Found     int                // distinct links in the feed
+	Links     []string           // candidates in page order, then the selection oldest first
+	Releases  map[string]Release // feed details per link, where the feed has them
+	Library   []string           // audio files present before downloading
 	Episodes  []Episode
 	Reason    string    // why the feed failed
 	Pending   int       // downloads not yet through
 	Began     time.Time // start of the first download
 }
 
+// Release date and title of the feed item around a link
+type Release struct {
+	Published time.Time
+	Title     string
+}
+
+// Date formats seen in RSS pubDate and Atom published
+var dateLayouts = []string{
+	time.RFC1123Z, time.RFC1123, "Mon, 2 Jan 2006 15:04:05 -0700", "Mon, 2 Jan 2006 15:04:05 MST",
+	"2 Jan 2006 15:04:05 -0700", "Mon, 2 Jan 2006 15:04 -0700", time.RFC3339,
+}
+
 var (
+	// RSS items and Atom entries with their release date and title
+	itemBlock = regexp.MustCompile(`(?is)<(?:item|entry)\b.*?</(?:item|entry)>`)
+	itemDate  = regexp.MustCompile(`(?is)<(?:pubDate|published|dc:date)>(.*?)</`)
+	itemTitle = regexp.MustCompile(`(?is)<title\b[^>]*>(.*?)</title>`)
+
 	linkAttribute = regexp.MustCompile(`(?i)<(?:a|audio|source|enclosure)\s[^>]*?\b(?:href|src|url)\s*=\s*(?:"([^"]*)"|'([^']*)')`)
 	absoluteLink  = regexp.MustCompile(`(?i)https?://[^\s<>"']+\.mp3(?:\?[^\s<>"']*)?`)
 
@@ -144,35 +162,36 @@ func scanFeeds(ctx context.Context, out printer, client *http.Client, config Con
 	bar := out.progress("Scanning", len(runs))
 	parallel(ctx, len(runs), config.Settings.FeedConcurrency, func(index int) {
 		run := &runs[index]
-		links, err := fetchLinks(ctx, client, run.Feed.URL, config.Settings.FeedTimeout)
+		links, releases, err := fetchLinks(ctx, client, run.Feed.URL, config.Settings.FeedTimeout)
 		if err != nil {
 			run.Reason = failureReason(err)
 		}
-		run.Found, run.Links = len(links), links
+		run.Found, run.Links, run.Releases = len(links), links, releases
 		bar.step(run.Feed.Name)
 	})
 	bar.done()
 	return runs
 }
 
-// Download one page and extract its links
-func fetchLinks(ctx context.Context, client *http.Client, address string, timeout time.Duration) ([]string, error) {
+// Download one page and extract its links with their feed details
+func fetchLinks(ctx context.Context, client *http.Client, address string, timeout time.Duration) ([]string, map[string]Release, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	response, err := open(ctx, client, http.MethodGet, address)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer response.Body.Close()
 	content, err := io.ReadAll(io.LimitReader(response.Body, maxFeedBytes))
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, nil, ctx.Err()
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// Relative links resolve against the redirect target
-	return extractLinks(content, response.Request.URL), nil
+	base := response.Request.URL
+	return extractLinks(content, base), releases(content, base), nil
 }
 
 // Distinct MP3 links in order of appearance
@@ -213,6 +232,48 @@ func extractLinks(content []byte, base *url.URL) []string {
 		}
 	}
 	return links
+}
+
+// Release date and title per link, taken from the item or entry that contains it
+func releases(content []byte, base *url.URL) map[string]Release {
+	found := map[string]Release{}
+	for _, block := range itemBlock.FindAll(content, -1) {
+		var release Release
+		if match := itemDate.FindSubmatch(block); match != nil {
+			release.Published = parseDate(cleanText(match[1]))
+		}
+		if match := itemTitle.FindSubmatch(block); match != nil {
+			release.Title = cleanText(match[1])
+		}
+		// Same extraction as for the whole page, so the links match
+		for _, link := range extractLinks(block, base) {
+			if _, known := found[link]; !known {
+				found[link] = release
+			}
+		}
+	}
+	return found
+}
+
+// Feed date in any of the usual formats; zero when unreadable
+func parseDate(text string) time.Time {
+	for _, layout := range dateLayouts {
+		if moment, err := time.Parse(layout, text); err == nil {
+			return moment
+		}
+	}
+	return time.Time{}
+}
+
+// Element text without CDATA wrapper, entities, and extra whitespace
+func cleanText(raw []byte) string {
+	text := strings.TrimSpace(string(raw))
+	if inner, ok := strings.CutPrefix(text, "<![CDATA["); ok {
+		text = strings.TrimSuffix(inner, "]]>")
+	} else {
+		text = html.UnescapeString(text)
+	}
+	return strings.Join(strings.Fields(text), " ")
 }
 
 // Drop mirrored episodes and keep the newest ones, oldest first

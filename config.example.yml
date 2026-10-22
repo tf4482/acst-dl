@@ -13,7 +13,7 @@ settings:
   download_files: true
   # Album tag set to the feed name
   tag_album: true
-  # Release date tag set to the download day
+  # Date tag set to the feed's release time; download day without one
   tag_release_date: false
   # false accepts broken TLS certificates
   verify_tls: true

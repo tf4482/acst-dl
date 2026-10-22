@@ -2,6 +2,18 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- File names, file times, and the date tag follow the release date of each RSS item or Atom entry, so episodes sort by release in every app
+- Present files named after their download time are renamed to their release date
+- A missing title tag is filled with the episode title from the feed
+
+### Changed
+
+- With `tag_release_date`, the date tag holds the release date and time from the feed; the download day only fills a missing date and never replaces the episode's own one
+
 ## [0.1.0] - 2026-10-22
 
 ### Added
