@@ -74,6 +74,13 @@ func readTag(t *testing.T, path string) (id3Tag, []byte) {
 // Episode file left by an earlier run
 const oldEpisode = "2026-01-01-000000000000_old_0badc0de.mp3"
 
+// Tag as written to a file
+func tagBytes(tag id3Tag, padding int) []byte {
+	var data bytes.Buffer
+	tag.writeTo(&data, padding)
+	return data.Bytes()
+}
+
 func audioFiles(t *testing.T, directory string) []string {
 	t.Helper()
 	files, err := filepath.Glob(filepath.Join(directory, "*"+audioSuffix))
@@ -241,7 +248,7 @@ func TestCopyTaggedRewritesLeadingTag(t *testing.T) {
 	old.setText("TIT2", "Title")
 	old.setText("TALB", "Old")
 
-	for name, leading := range map[string][]byte{"no tag": nil, "version 3": old.serialize(40)} {
+	for name, leading := range map[string][]byte{"no tag": nil, "version 3": tagBytes(old, 40)} {
 		var target bytes.Buffer
 		written, tagged, err := copyTagged(&target, bytes.NewReader(append(leading, audio...)), tags)
 		if err != nil || !tagged || written != int64(target.Len()) {
@@ -266,6 +273,22 @@ func TestCopyTaggedRewritesLeadingTag(t *testing.T) {
 	var target bytes.Buffer
 	if _, tagged, err := copyTagged(&target, bytes.NewReader(legacy), tags); err != nil || tagged || !bytes.Equal(target.Bytes(), legacy) {
 		t.Fatalf("legacy tag changed: %v %v", tagged, err)
+	}
+}
+
+func TestLargeTagIsRewritten(t *testing.T) {
+	// Chapter images can push a tag past tens of megabytes
+	big := id3Tag{version: 4}
+	big.frames = append(big.frames, id3Frame{id: "CHAP", body: bytes.Repeat([]byte{1}, 40<<20)})
+	audio := []byte("\xFF\xFBaudio-frames")
+	var target bytes.Buffer
+	if _, tagged, err := copyTagged(&target, bytes.NewReader(append(tagBytes(big, 0), audio...)), Tags{Album: "News"}); err != nil || !tagged {
+		t.Fatalf("large tag skipped: %v %v", tagged, err)
+	}
+	data := target.Bytes()
+	tag, _ := parseID3(data[:id3Length(data)])
+	if tag.text("TALB") != "News" || len(tag.frames) != 2 || !bytes.Equal(data[id3Length(data):], audio) {
+		t.Fatalf("unexpected result: %d frames", len(tag.frames))
 	}
 }
 

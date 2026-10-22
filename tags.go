@@ -16,8 +16,9 @@ import (
 const (
 	id3HeaderSize = 10
 	// Spare room so later tag edits happen in place
-	id3Padding  = 256
-	maxTagBytes = 32 << 20
+	id3Padding = 256
+	// Largest tag the header can state; chapter images alone can take tens of megabytes
+	maxTagBytes = 256 << 20
 	copyBuffer  = 256 << 10
 
 	// ID3v2 header flags
@@ -70,15 +71,18 @@ func copyTagged(destination io.Writer, source io.Reader, tags Tags) (written int
 		return 0, false, err
 	}
 	tag, supported := parseID3(leading)
+	var size int
 	if supported {
 		tag.apply(tags)
-		leading = tag.serialize(id3Padding)
+		size, err = tag.writeTo(destination, id3Padding)
+	} else {
+		size, err = destination.Write(leading)
 	}
-	if _, err := destination.Write(leading); err != nil {
+	if err != nil {
 		return 0, false, err
 	}
 	written, err = io.Copy(destination, reader)
-	return written + int64(len(leading)), supported, err
+	return written + int64(size), supported, err
 }
 
 // Bring an existing file's tags up to date; true when it was changed
@@ -110,8 +114,8 @@ func retagFile(path string, tags Tags) (bool, error) {
 	}
 
 	// Reuse the old tag's space when the new one fits
-	if spare := length - len(tag.serialize(0)); spare >= 0 {
-		_, err := file.WriteAt(tag.serialize(spare), 0)
+	if spare := length - id3HeaderSize - tag.frameBytes(); spare >= 0 {
+		_, err := tag.writeTo(io.NewOffsetWriter(file, 0), spare)
 		return err == nil, err
 	}
 
@@ -121,7 +125,7 @@ func retagFile(path string, tags Tags) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, err = target.Write(tag.serialize(id3Padding))
+	_, err = tag.writeTo(target, id3Padding)
 	if err == nil {
 		_, err = io.Copy(target, io.NewSectionReader(file, int64(length), 1<<62))
 	}
@@ -292,22 +296,36 @@ func (t *id3Tag) remove(id string) {
 	t.frames = slices.DeleteFunc(t.frames, func(frame id3Frame) bool { return frame.id == id })
 }
 
-// Tag bytes with the given amount of trailing padding
-func (t *id3Tag) serialize(padding int) []byte {
-	data := []byte{'I', 'D', '3', t.version, 0, t.flags, 0, 0, 0, 0}
+// Size of all frames with their headers
+func (t *id3Tag) frameBytes() int {
+	size := 0
 	for _, frame := range t.frames {
-		data = append(data, frame.id...)
-		if t.version == 4 {
-			data = appendSynchsafe(data, len(frame.body))
-		} else {
-			data = binary.BigEndian.AppendUint32(data, uint32(len(frame.body)))
-		}
-		data = append(data, frame.flags[:]...)
-		data = append(data, frame.body...)
+		size += id3HeaderSize + len(frame.body)
 	}
-	data = append(data, make([]byte, padding)...)
-	copy(data[6:10], appendSynchsafe(nil, len(data)-id3HeaderSize))
-	return data
+	return size
+}
+
+// Write the tag with the given amount of trailing padding; frame bodies are written as they are, never copied
+func (t *id3Tag) writeTo(destination io.Writer, padding int) (int, error) {
+	chunks := [][]byte{appendSynchsafe([]byte{'I', 'D', '3', t.version, 0, t.flags}, t.frameBytes()+padding)}
+	for _, frame := range t.frames {
+		header := append([]byte(frame.id), 0, 0, 0, 0, frame.flags[0], frame.flags[1])
+		if t.version == 4 {
+			copy(header[4:8], appendSynchsafe(nil, len(frame.body)))
+		} else {
+			binary.BigEndian.PutUint32(header[4:8], uint32(len(frame.body)))
+		}
+		chunks = append(chunks, header, frame.body)
+	}
+	written := 0
+	for _, chunk := range append(chunks, make([]byte, padding)) {
+		count, err := destination.Write(chunk)
+		written += count
+		if err != nil {
+			return written, err
+		}
+	}
+	return written, nil
 }
 
 func appendSynchsafe(data []byte, value int) []byte {
