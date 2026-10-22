@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -32,6 +33,9 @@ const (
 	statePresent    = "present"
 	stateFailed     = "failed"
 )
+
+// Audio file named by this tool, ending in the link hash
+var ownFile = regexp.MustCompile(`_[0-9a-f]{8}\.mp3$`)
 
 // One selected episode and what happened to it
 type Episode struct {
@@ -61,7 +65,8 @@ func planLibrary(run *FeedRun, started time.Time) error {
 		case strings.HasSuffix(name, audioSuffix+partSuffix):
 			// Leftover of an interrupted run
 			os.Remove(filepath.Join(run.Directory, entry.Name()))
-		case strings.HasSuffix(name, audioSuffix):
+		case ownFile.MatchString(name):
+			// Other audio in the folder is never touched
 			run.Library = append(run.Library, entry.Name())
 		}
 	}
@@ -87,9 +92,6 @@ func planLibrary(run *FeedRun, started time.Time) error {
 
 // Readable name and stable hash of an episode link
 func episodeName(link string) (name, hash string) {
-	sum := md5.Sum([]byte(link))
-	hash = hex.EncodeToString(sum[:])[:hashLength]
-
 	if parsed, err := url.Parse(link); err == nil {
 		path := strings.TrimRight(parsed.Path, "/")
 		name = path[strings.LastIndex(path, "/")+1:]
@@ -97,10 +99,17 @@ func episodeName(link string) (name, hash string) {
 	if strings.HasSuffix(strings.ToLower(name), audioSuffix) {
 		name = name[:len(name)-len(audioSuffix)]
 	}
-	// Names like media.mp3 say nothing, so use the link's identifier
+	stable := link
 	if genericParts[strings.ToLower(name)] {
+		// Names like media.mp3 say nothing, so use the link's identifier; the query may tell episodes apart
 		name = linkIdentifier(link)
+	} else {
+		// Changing tokens or tracking parameters must not make a new episode
+		stable, _, _ = strings.Cut(link, "?")
 	}
+	sum := md5.Sum([]byte(stable))
+	hash = hex.EncodeToString(sum[:])[:hashLength]
+
 	// Only letters, digits, dots, dashes, and underscores reach the file system
 	name = strings.Map(func(char rune) rune {
 		if unicode.IsLetter(char) || unicode.IsDigit(char) || strings.ContainsRune(".-_", char) {

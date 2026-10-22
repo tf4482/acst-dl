@@ -2,6 +2,16 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Query parameters such as tokens no longer change the link hash, unless the file name is generic;
+  episodes found under such links are fetched once more
+- Only the tool's own episode files are removed from feed folders; other audio stays untouched
+- Retagging and cleanup of a finished feed no longer hold up the other downloads
+- Banner shows 🚀 in a correctly sized frame
+
 ## [0.1.0] - 2026-10-05
 
 ### Added

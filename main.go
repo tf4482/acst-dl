@@ -31,7 +31,7 @@ Behavior:
   episodes by comparing HEAD metadata, and keeps the newest max_episodes.
   Missing episodes are downloaded in parallel into one folder per feed,
   tagged while streaming; episodes already present are not fetched again.
-  Audio files that left the selection are removed from the feed folder,
+  Episode files that left the selection are removed from the feed folder,
   unless one of the feed's episodes failed.
   With download_files off, only links.txt is written per feed.
 
@@ -99,7 +99,7 @@ func execute(ctx context.Context, out printer, config Config) int {
 		}
 		// Feeds with nothing to fetch report right away
 		if run.Pending = len(queues[index]); run.Pending == 0 {
-			finishFeed(out.line, run, feedTags(run.Feed, settings, started), &sum)
+			sum.add(finishFeed(out.line, run, feedTags(run.Feed, settings, started)))
 		}
 	}
 	downloads := interleave(queues)
@@ -112,12 +112,6 @@ func execute(ctx context.Context, out printer, config Config) int {
 	parallel(ctx, len(downloads), settings.DownloadConcurrency, func(index int) {
 		run, episode := downloads[index].run, downloads[index].episode
 		tags := feedTags(run.Feed, settings, started)
-		mutex.Lock()
-		if run.Began.IsZero() {
-			run.Began = time.Now()
-		}
-		mutex.Unlock()
-
 		began := time.Now()
 		downloadEpisode(ctx, client, episode, run.Directory, tags, settings.DownloadTimeout)
 		episode.Took = time.Since(began)
@@ -127,12 +121,22 @@ func execute(ctx context.Context, out printer, config Config) int {
 		}
 
 		// One line per download, then the feed summary after its last one
-		mutex.Lock()
-		defer mutex.Unlock()
 		bar.line(episodeLine(run.Feed.Name, episode))
-		if run.Pending--; run.Pending == 0 {
-			finishFeed(bar.line, run, tags, &sum)
+		mutex.Lock()
+		if run.Began.IsZero() || began.Before(run.Began) {
+			run.Began = began
 		}
+		run.Pending--
+		last := run.Pending == 0
+		mutex.Unlock()
+		if !last {
+			return
+		}
+		// File work runs unlocked so other downloads keep going
+		feed := finishFeed(bar.line, run, tags)
+		mutex.Lock()
+		sum.add(feed)
+		mutex.Unlock()
 	})
 	bar.done()
 	if ctx.Err() != nil {
@@ -150,6 +154,15 @@ func execute(ctx context.Context, out printer, config Config) int {
 		return 1
 	}
 	return 0
+}
+
+// Fold one feed's counters into the run's
+func (t *totals) add(feed totals) {
+	t.downloaded += feed.downloaded
+	t.present += feed.present
+	t.removed += feed.removed
+	t.bytes += feed.bytes
+	t.failed = t.failed || feed.failed
 }
 
 // Alternate between feeds so parallel downloads spread over hosts
@@ -205,16 +218,15 @@ func episodeLine(name string, episode *Episode) (icon, text, color string) {
 }
 
 // Retag present files, remove stale ones, and print the feed summary
-func finishFeed(say func(icon, text, color string), run *FeedRun, tags Tags, sum *totals) {
+func finishFeed(say func(icon, text, color string), run *FeedRun, tags Tags) (sum totals) {
 	name := run.Feed.Name
 	if run.Reason != "" {
-		sum.failed = true
 		say("❌", fmt.Sprintf("%s · feed · %s", name, run.Reason), red)
-		return
+		return totals{failed: true}
 	}
 	if len(run.Links) == 0 {
 		say("⚠️", name+" · no MP3 links found", yellow)
-		return
+		return sum
 	}
 
 	downloaded, present, failed, size := 0, 0, 0, int64(0)
@@ -243,10 +255,10 @@ func finishFeed(say func(icon, text, color string), run *FeedRun, tags Tags, sum
 			say("⚠️", fmt.Sprintf("%s · old file not removed · %s", name, failureReason(err)), yellow)
 		}
 	}
-	sum.downloaded += downloaded
-	sum.present += present
-	sum.removed += removed
-	sum.bytes += size
+	sum.downloaded = downloaded
+	sum.present = present
+	sum.removed = removed
+	sum.bytes = size
 
 	icon, color := "🎙️", boldGreen
 	if failed > 0 {
@@ -265,6 +277,7 @@ func finishFeed(say func(icon, text, color string), run *FeedRun, tags Tags, sum
 		fields = append(fields, fmt.Sprintf("%d failed", failed))
 	}
 	say(icon, strings.Join(fields, " · "), color)
+	return sum
 }
 
 // Links-only mode: one links.txt per feed

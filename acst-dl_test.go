@@ -71,13 +71,16 @@ func readTag(t *testing.T, path string) (id3Tag, []byte) {
 	return tag, data[length:]
 }
 
+// Episode file left by an earlier run
+const oldEpisode = "2026-01-01-000000000000_old_0badc0de.mp3"
+
 func audioFiles(t *testing.T, directory string) []string {
 	t.Helper()
 	files, err := filepath.Glob(filepath.Join(directory, "*"+audioSuffix))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return files
+	return slices.DeleteFunc(files, func(file string) bool { return !ownFile.MatchString(filepath.Base(file)) })
 }
 
 func TestExecutableConfigTakesPrecedence(t *testing.T) {
@@ -220,6 +223,14 @@ func TestContentSignature(t *testing.T) {
 	if name, _ := episodeName("https://a.example/episodes/0123456789abcdef0123/media.mp3"); name != "0123456789abcdef0123" {
 		t.Fatalf("generic name kept: %q", name)
 	}
+	// Rotating tokens keep the hash, unless the query is all that tells episodes apart
+	_, plain := episodeName("https://a.example/ep120.mp3")
+	_, token := episodeName("https://a.example/ep120.mp3?token=abc")
+	_, firstID := episodeName("https://a.example/media.mp3?id=1")
+	_, secondID := episodeName("https://a.example/media.mp3?id=2")
+	if plain != token || firstID == secondID {
+		t.Fatalf("unexpected hashes: %q %q %q %q", plain, token, firstID, secondID)
+	}
 }
 
 func TestCopyTaggedRewritesLeadingTag(t *testing.T) {
@@ -342,7 +353,8 @@ func TestRunDownloadsOnceAndTidies(t *testing.T) {
 	directory := t.TempDir()
 	config := testConfig(directory, server.URL+"/feed.xml")
 	feedDir := filepath.Join(directory, "News")
-	writeFile(t, filepath.Join(feedDir, "old-episode.mp3"), "old")
+	writeFile(t, filepath.Join(feedDir, oldEpisode), "old")
+	writeFile(t, filepath.Join(feedDir, "jingle.mp3"), "foreign")
 	writeFile(t, filepath.Join(feedDir, "crashed.mp3.part"), "partial")
 
 	var output bytes.Buffer
@@ -360,7 +372,8 @@ func TestRunDownloadsOnceAndTidies(t *testing.T) {
 	if tag, audio := readTag(t, files[1]); tag.text("TALB") != "News" || string(audio) != "\xFF\xFB/media/ep3.mp3" {
 		t.Fatalf("unexpected episode: %+v %q", tag, audio)
 	}
-	if entries, _ := os.ReadDir(feedDir); len(entries) != 2 {
+	// Only foreign audio stays beside the selection
+	if entries, _ := os.ReadDir(feedDir); len(entries) != 3 {
 		t.Fatalf("leftovers kept: %v", entries)
 	}
 
@@ -395,7 +408,7 @@ func TestFailuresKeepTheLibraryClean(t *testing.T) {
 	config.Feeds = append(config.Feeds, Feed{"Offline", server.URL + "/missing.xml"})
 	config.Settings.DownloadTimeout = 300 * time.Millisecond
 	feedDir := filepath.Join(config.Directory, "News")
-	writeFile(t, filepath.Join(feedDir, "old-episode.mp3"), "old")
+	writeFile(t, filepath.Join(feedDir, oldEpisode), "old")
 
 	var output bytes.Buffer
 	started := time.Now()
@@ -408,7 +421,7 @@ func TestFailuresKeepTheLibraryClean(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, output.String())
 	}
 	// Only the old episode remains: no partial file, nothing removed
-	if entries, _ := os.ReadDir(feedDir); len(entries) != 1 || entries[0].Name() != "old-episode.mp3" {
+	if entries, _ := os.ReadDir(feedDir); len(entries) != 1 || entries[0].Name() != oldEpisode {
 		t.Fatalf("unexpected folder: %v", entries)
 	}
 }
