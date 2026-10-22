@@ -31,8 +31,9 @@ type printer struct {
 
 // Framed startup banner
 func (p printer) header() {
-	title := "  ⚙️  " + projectName + " — starting  "
-	border := strings.Repeat("─", utf8.RuneCountInString(title))
+	// Rocket is two cells wide everywhere, unlike the gear
+	title := "  🚀  " + projectName + " — starting  "
+	border := strings.Repeat("─", utf8.RuneCountInString(title)+1)
 	fmt.Fprintln(p.out)
 	for _, line := range []string{"╭" + border + "╮", "│" + title + "│", "╰" + border + "╯"} {
 		p.print(line, cyan)
