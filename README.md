@@ -11,8 +11,10 @@ into one folder per feed, tags them, and exits. Ships as a single static binary.
 - 🧬 **Mirror detection**: links with the same size and ETag or Last-Modified, or the same identifier
   in their path, count as one episode.
 - ⏭️ **No re-downloads**: an 8-character link hash in the file name marks episodes already present.
-- 🏷️ **Tagging**: album (feed name) and release date (download day) are written into the ID3 tag while
-  streaming; existing files are corrected when their tags differ.
+- 🏷️ **Tagging**: album (feed name) and release date are written into the ID3 tag while streaming;
+  existing files are corrected when their tags differ. A missing title is taken from the feed.
+- 📅 **Release order**: the feed's release date and time go into the file name, the date tag, and the
+  file time, so every app sorts episodes by release, whether it reads tags, names, or file dates.
 - 🧹 **Tidy library**: keeps the newest `max_episodes` per feed and removes its own episode files that
   left the selection, but only when all of the feed's episodes succeeded.
 - 🛡️ **Safe writes**: episodes are written as `.part` and renamed when complete; leftovers are removed.
@@ -37,12 +39,13 @@ sudo install -m 755 dist/acst-dl /usr/local/bin/acst-dl
 ```text
 ~/Podcasts/
 └── Tech News/
-    ├── 2026-10-05-171536849510_episode-41_4a229f67.mp3
-    └── 2026-10-05-171536849511_episode-42_216a2633.mp3
+    ├── 2026-10-14-060000000000_episode-41_4a229f67.mp3
+    └── 2026-10-21-060000000001_episode-42_216a2633.mp3
 ```
 
-File names are `<download time>_<name from link>_<link hash>.mp3`; within a run the newest episode
-gets the latest time, so files sort in feed order. Query parameters such as tokens do not change the
+File names are `<release time>_<name from link>_<link hash>.mp3`, with the release date of the RSS item
+or Atom entry; links without one fall back to the download time. Files named after an earlier
+download time are renamed once the release date is known, and their file time is set to it. Query parameters such as tokens do not change the
 hash, unless the file name is generic like `media.mp3`. Episode files that left the current selection
 are deleted; other audio without a link hash in its name is never touched. Feeds without links,
 failed feeds, and feeds with a failed episode delete nothing.
@@ -80,7 +83,7 @@ If neither exists, the second one is created with dummy values and the run exits
 | `library.directory` | Base folder, absolute or starting with `~/` |
 | `settings.max_episodes` | Newest episodes kept per feed; `0` keeps all |
 | `settings.download_files` | `false` only writes `links.txt` per feed |
-| `settings.tag_album`, `tag_release_date` | Set album to the feed name, release date to the download day |
+| `settings.tag_album`, `tag_release_date` | Set album to the feed name, date to the feed's release time (download day without one) |
 | `settings.verify_tls` | `false` accepts invalid TLS certificates |
 | `settings.feed_concurrency`, `probe_concurrency`, `download_concurrency` | Parallel requests per kind of work |
 | `settings.feed_timeout_seconds`, `probe_timeout_seconds`, `download_timeout_seconds` | Hard deadline per request, including the whole episode transfer |
