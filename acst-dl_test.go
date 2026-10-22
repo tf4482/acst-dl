@@ -220,6 +220,14 @@ func TestContentSignature(t *testing.T) {
 	if name, _ := episodeName("https://a.example/episodes/0123456789abcdef0123/media.mp3"); name != "0123456789abcdef0123" {
 		t.Fatalf("generic name kept: %q", name)
 	}
+	// Rotating tokens keep the hash, unless the query is all that tells episodes apart
+	_, plain := episodeName("https://a.example/ep120.mp3")
+	_, token := episodeName("https://a.example/ep120.mp3?token=abc")
+	_, firstID := episodeName("https://a.example/media.mp3?id=1")
+	_, secondID := episodeName("https://a.example/media.mp3?id=2")
+	if plain != token || firstID == secondID {
+		t.Fatalf("unexpected hashes: %q %q %q %q", plain, token, firstID, secondID)
+	}
 }
 
 func TestCopyTaggedRewritesLeadingTag(t *testing.T) {
