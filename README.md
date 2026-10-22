@@ -49,8 +49,8 @@ failed feeds, and feeds with a failed episode delete nothing.
 
 ## 🔁 Migrating from the Python version
 
-Libraries stay valid: the link hash is unchanged, so present episodes are recognized. Links containing
-HTML entities such as `&amp;` are now decoded and are fetched once more.
+Libraries stay valid: the link hash is unchanged for links without a query, so present episodes are
+recognized. Links with a query or with HTML entities such as `&amp;` are fetched once more.
 
 | `acst-dl-config.json` | `config.yml` |
 | --- | --- |
