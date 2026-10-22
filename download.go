@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -32,6 +33,9 @@ const (
 	statePresent    = "present"
 	stateFailed     = "failed"
 )
+
+// Audio file named by this tool, ending in the link hash
+var ownFile = regexp.MustCompile(`_[0-9a-f]{8}\.mp3$`)
 
 // One selected episode and what happened to it
 type Episode struct {
@@ -61,7 +65,8 @@ func planLibrary(run *FeedRun, started time.Time) error {
 		case strings.HasSuffix(name, audioSuffix+partSuffix):
 			// Leftover of an interrupted run
 			os.Remove(filepath.Join(run.Directory, entry.Name()))
-		case strings.HasSuffix(name, audioSuffix):
+		case ownFile.MatchString(name):
+			// Other audio in the folder is never touched
 			run.Library = append(run.Library, entry.Name())
 		}
 	}

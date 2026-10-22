@@ -31,7 +31,7 @@ Behavior:
   episodes by comparing HEAD metadata, and keeps the newest max_episodes.
   Missing episodes are downloaded in parallel into one folder per feed,
   tagged while streaming; episodes already present are not fetched again.
-  Audio files that left the selection are removed from the feed folder,
+  Episode files that left the selection are removed from the feed folder,
   unless one of the feed's episodes failed.
   With download_files off, only links.txt is written per feed.
 

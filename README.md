@@ -13,8 +13,8 @@ into one folder per feed, tags them, and exits. Ships as a single static binary.
 - ⏭️ **No re-downloads**: an 8-character link hash in the file name marks episodes already present.
 - 🏷️ **Tagging**: album (feed name) and release date (download day) are written into the ID3 tag while
   streaming; existing files are corrected when their tags differ.
-- 🧹 **Tidy library**: keeps the newest `max_episodes` per feed and removes audio files that left the
-  selection, but only when all of the feed's episodes succeeded.
+- 🧹 **Tidy library**: keeps the newest `max_episodes` per feed and removes its own episode files that
+  left the selection, but only when all of the feed's episodes succeeded.
 - 🛡️ **Safe writes**: episodes are written as `.part` and renamed when complete; leftovers are removed.
 - 🔗 **Links only**: optionally writes `links.txt` per feed instead of downloading.
 - 🔓 **TLS bypass**: optional for hosts with broken certificates.
@@ -42,8 +42,9 @@ sudo install -m 755 dist/acst-dl /usr/local/bin/acst-dl
 ```
 
 File names are `<download time>_<name from link>_<link hash>.mp3`; within a run the newest episode
-gets the latest time, so files sort in feed order. Every `.mp3` in a feed folder that is not part of
-the current selection is deleted, so keep other audio out of these folders. Feeds without links,
+gets the latest time, so files sort in feed order. Query parameters such as tokens do not change the
+hash, unless the file name is generic like `media.mp3`. Episode files that left the current selection
+are deleted; other audio without a link hash in its name is never touched. Feeds without links,
 failed feeds, and feeds with a failed episode delete nothing.
 
 ## 🔁 Migrating from the Python version
