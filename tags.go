@@ -9,14 +9,16 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf16"
 )
 
 const (
 	id3HeaderSize = 10
 	// Spare room so later tag edits happen in place
-	id3Padding  = 256
-	maxTagBytes = 32 << 20
+	id3Padding = 256
+	// Largest tag the header can state; chapter images alone can take tens of megabytes
+	maxTagBytes = 256 << 20
 	copyBuffer  = 256 << 10
 
 	// ID3v2 header flags
@@ -28,7 +30,10 @@ const (
 // Wanted tag values; empty ones are left alone
 type Tags struct {
 	Album string
-	Date  string // YYYY-MM-DD
+	Title string    // only fills a missing title
+	Date  time.Time // release moment
+	// Date is the feed's release date and replaces any other; otherwise it only fills a missing date
+	Published bool
 }
 
 // Raw ID3v2 frame, kept verbatim unless replaced
@@ -66,15 +71,18 @@ func copyTagged(destination io.Writer, source io.Reader, tags Tags) (written int
 		return 0, false, err
 	}
 	tag, supported := parseID3(leading)
+	var size int
 	if supported {
-		tag.apply(tags, true)
-		leading = tag.serialize(id3Padding)
+		tag.apply(tags)
+		size, err = tag.writeTo(destination, id3Padding)
+	} else {
+		size, err = destination.Write(leading)
 	}
-	if _, err := destination.Write(leading); err != nil {
+	if err != nil {
 		return 0, false, err
 	}
 	written, err = io.Copy(destination, reader)
-	return written + int64(len(leading)), supported, err
+	return written + int64(size), supported, err
 }
 
 // Bring an existing file's tags up to date; true when it was changed
@@ -101,13 +109,13 @@ func retagFile(path string, tags Tags) (bool, error) {
 		return false, err
 	}
 	tag, supported := parseID3(leading)
-	if !supported || !tag.apply(tags, false) {
+	if !supported || !tag.apply(tags) {
 		return false, nil
 	}
 
 	// Reuse the old tag's space when the new one fits
-	if spare := length - len(tag.serialize(0)); spare >= 0 {
-		_, err := file.WriteAt(tag.serialize(spare), 0)
+	if spare := length - id3HeaderSize - tag.frameBytes(); spare >= 0 {
+		_, err := tag.writeTo(io.NewOffsetWriter(file, 0), spare)
 		return err == nil, err
 	}
 
@@ -117,7 +125,7 @@ func retagFile(path string, tags Tags) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, err = target.Write(tag.serialize(id3Padding))
+	_, err = tag.writeTo(target, id3Padding)
 	if err == nil {
 		_, err = io.Copy(target, io.NewSectionReader(file, int64(length), 1<<62))
 	}
@@ -218,27 +226,44 @@ func synchsafe(data []byte) int {
 	return int(data[0]&0x7F)<<21 | int(data[1]&0x7F)<<14 | int(data[2]&0x7F)<<7 | int(data[3]&0x7F)
 }
 
-// Set the wanted values; an existing date survives unless overwrite is set
-func (t *id3Tag) apply(tags Tags, overwrite bool) bool {
+// Set the wanted values; true when anything changed
+func (t *id3Tag) apply(tags Tags) bool {
 	changed := false
-	if tags.Album != "" && t.text("TALB") != tags.Album {
-		t.setText("TALB", tags.Album)
-		changed = true
+	set := func(id, value string) {
+		if t.text(id) != value {
+			t.setText(id, value)
+			changed = true
+		}
 	}
-	if tags.Date == "" {
+	if tags.Album != "" {
+		set("TALB", tags.Album)
+	}
+	if tags.Title != "" && t.text("TIT2") == "" {
+		set("TIT2", tags.Title)
+	}
+	if tags.Date.IsZero() {
 		return changed
 	}
 	if t.version == 4 {
-		if current := t.text("TDRC"); current == "" || overwrite && current != tags.Date {
-			t.setText("TDRC", tags.Date)
+		// Exact moment only from the feed; the download day is just a day
+		value := tags.Date.Format("2006-01-02")
+		if tags.Published {
+			value = tags.Date.Format("2006-01-02T15:04:05")
+		}
+		if tags.Published || t.text("TDRC") == "" {
+			set("TDRC", value)
+		}
+	} else if tags.Published || t.text("TYER") == "" {
+		// Version 3 splits the date into year, DDMM, and HHMM
+		if slices.ContainsFunc(t.frames, func(frame id3Frame) bool { return frame.id == "TDRC" }) {
+			t.remove("TDRC")
 			changed = true
 		}
-	} else if overwrite || t.text("TYER") == "" {
-		// Version 3 splits the date into year and DDMM
-		t.remove("TDRC")
-		t.setText("TYER", tags.Date[:4])
-		t.setText("TDAT", tags.Date[8:10]+tags.Date[5:7])
-		changed = true
+		set("TYER", tags.Date.Format("2006"))
+		set("TDAT", tags.Date.Format("0201"))
+		if tags.Published {
+			set("TIME", tags.Date.Format("1504"))
+		}
 	}
 	return changed
 }
@@ -271,22 +296,36 @@ func (t *id3Tag) remove(id string) {
 	t.frames = slices.DeleteFunc(t.frames, func(frame id3Frame) bool { return frame.id == id })
 }
 
-// Tag bytes with the given amount of trailing padding
-func (t *id3Tag) serialize(padding int) []byte {
-	data := []byte{'I', 'D', '3', t.version, 0, t.flags, 0, 0, 0, 0}
+// Size of all frames with their headers
+func (t *id3Tag) frameBytes() int {
+	size := 0
 	for _, frame := range t.frames {
-		data = append(data, frame.id...)
-		if t.version == 4 {
-			data = appendSynchsafe(data, len(frame.body))
-		} else {
-			data = binary.BigEndian.AppendUint32(data, uint32(len(frame.body)))
-		}
-		data = append(data, frame.flags[:]...)
-		data = append(data, frame.body...)
+		size += id3HeaderSize + len(frame.body)
 	}
-	data = append(data, make([]byte, padding)...)
-	copy(data[6:10], appendSynchsafe(nil, len(data)-id3HeaderSize))
-	return data
+	return size
+}
+
+// Write the tag with the given amount of trailing padding; frame bodies are written as they are, never copied
+func (t *id3Tag) writeTo(destination io.Writer, padding int) (int, error) {
+	chunks := [][]byte{appendSynchsafe([]byte{'I', 'D', '3', t.version, 0, t.flags}, t.frameBytes()+padding)}
+	for _, frame := range t.frames {
+		header := append([]byte(frame.id), 0, 0, 0, 0, frame.flags[0], frame.flags[1])
+		if t.version == 4 {
+			copy(header[4:8], appendSynchsafe(nil, len(frame.body)))
+		} else {
+			binary.BigEndian.PutUint32(header[4:8], uint32(len(frame.body)))
+		}
+		chunks = append(chunks, header, frame.body)
+	}
+	written := 0
+	for _, chunk := range append(chunks, make([]byte, padding)) {
+		count, err := destination.Write(chunk)
+		written += count
+		if err != nil {
+			return written, err
+		}
+	}
+	return written, nil
 }
 
 func appendSynchsafe(data []byte, value int) []byte {

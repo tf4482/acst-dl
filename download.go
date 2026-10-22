@@ -47,6 +47,9 @@ type Episode struct {
 	Size     int64
 	Untagged bool // saved without the wanted tags
 	Took     time.Duration
+	// From the feed; zero and empty when it has none
+	Published time.Time
+	Title     string
 }
 
 // Create the feed folder and match the selection against its files
@@ -74,16 +77,31 @@ func planLibrary(run *FeedRun, started time.Time) error {
 	run.Episodes = make([]Episode, len(run.Links))
 	for index, link := range run.Links {
 		name, hash := episodeName(link)
-		episode := Episode{URL: link, Name: name}
+		release := run.Releases[link]
+		episode := Episode{URL: link, Name: name, Published: release.Published, Title: release.Title}
+		// Names sort by release date, or by download time without one;
+		// one microsecond apart keeps equal moments in feed order
+		moment := started
+		if !release.Published.IsZero() {
+			moment = release.Published.Local()
+		}
+		moment = moment.Add(time.Duration(index) * time.Microsecond)
+		filename := fmt.Sprintf("%s%06d_%s_%s%s",
+			moment.Format("2006-01-02-150405"), moment.Nanosecond()/1000, name, hash, audioSuffix)
+
 		ending := "_" + hash + audioSuffix
 		present := slices.IndexFunc(run.Library, func(file string) bool { return strings.HasSuffix(strings.ToLower(file), ending) })
-		if present >= 0 {
+		switch {
+		case present < 0:
+			episode.Filename = filename
+		case release.Published.IsZero() || run.Library[present] == filename:
 			episode.Filename, episode.State = run.Library[present], statePresent
-		} else {
-			// One microsecond apart keeps files sorted in feed order
-			moment := started.Add(time.Duration(index) * time.Microsecond)
-			episode.Filename = fmt.Sprintf("%s%06d_%s_%s%s",
-				moment.Format("2006-01-02-150405"), moment.Nanosecond()/1000, name, hash, audioSuffix)
+		default:
+			// Files named after their download time move to their release date
+			episode.Filename, episode.State = run.Library[present], statePresent
+			if os.Rename(filepath.Join(run.Directory, episode.Filename), filepath.Join(run.Directory, filename)) == nil {
+				run.Library[present], episode.Filename = filename, filename
+			}
 		}
 		run.Episodes[index] = episode
 	}
@@ -143,6 +161,14 @@ func downloadEpisode(ctx context.Context, client *http.Client, episode *Episode,
 	}
 	episode.State, episode.Size = stateDownloaded, size
 	episode.Untagged = tags != (Tags{}) && !tagged
+	stamp(path, episode.Published)
+}
+
+// File time set to the release date, for apps that sort by it; best effort, unknown dates stay
+func stamp(path string, published time.Time) {
+	if !published.IsZero() {
+		os.Chtimes(path, published, published)
+	}
 }
 
 // Write to a partial file and rename it once complete
