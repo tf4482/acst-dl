@@ -11,8 +11,8 @@ into one folder per feed, tags them, and exits. Ships as a single static binary.
 - 🧬 **Mirror detection**: links with the same size and ETag or Last-Modified, or the same identifier
   in their path, count as one episode.
 - ⏭️ **No re-downloads**: an 8-character link hash in the file name marks episodes already present.
-- 🏷️ **Tagging**: album (feed name) and release date are written into the ID3 tag while streaming;
-  existing files are corrected when their tags differ. A missing title is taken from the feed.
+- 🏷️ **Tagging**: album (feed name), release date, and a missing title from the feed are written into
+  the ID3 tag while streaming, and existing files are corrected when their tags differ.
 - 📅 **Release order**: the feed's release date and time go into the file name, the date tag, and the
   file time, so every app sorts episodes by release, whether it reads tags, names, or file dates.
 - 🧹 **Tidy library**: keeps the newest `max_episodes` per feed and removes its own episode files that
@@ -21,7 +21,7 @@ into one folder per feed, tags them, and exits. Ships as a single static binary.
 - 🔗 **Links only**: optionally writes `links.txt` per feed instead of downloading.
 - 🔓 **TLS bypass**: optional for hosts with broken certificates.
 - 📝 **First run**: creates a user-only config template.
-- 🌈 **Output**: colored with emojis, one line per finished download, a summary per feed with count, size, duration, and speed, and a live progress bar; plain when redirected or `NO_COLOR` is set.
+- 🌈 **Output**: colored with emojis, one line per finished download, a summary per feed with count, size, duration, and speed, and a live progress bar; in pipes, logs, and services it stays quiet with a one-line banner, no progress bar, and only feeds that changed or failed.
 
 ## 📦 Install
 
@@ -91,8 +91,11 @@ If neither exists, the second one is created with dummy values and the run exits
 ## 🚀 Usage
 
 ```bash
-acst-dl
-acst-dl --help   # also: -h, help
+acst-dl                              # download the newest episodes of every feed
+acst-dl --help                       # also: -h, help
+acst-dl | tee acst-dl.log            # quiet log output: no progress bar, only changes
+NO_COLOR=1 acst-dl                   # without colors
+sudo systemctl start acst-dl.service # one run as the service user
 ```
 
 | Exit | Meaning |
@@ -119,6 +122,7 @@ Adjust `User=` in the service; that account needs the configuration and write ac
 ## 🧪 Develop
 
 ```bash
+gofmt -l .
 go vet ./...
 go test ./...
 ```
