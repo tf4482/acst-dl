@@ -213,6 +213,7 @@ func frameEnds(body []byte, size int) bool {
 	return body[end] == 0 || end+4 <= len(body) && isFrameID(body[end:end+4])
 }
 
+// Four uppercase letters or digits
 func isFrameID(id []byte) bool {
 	for _, char := range id {
 		if (char < 'A' || char > 'Z') && (char < '0' || char > '9') {
@@ -222,6 +223,7 @@ func isFrameID(id []byte) bool {
 	return true
 }
 
+// Decode a 28-bit synchsafe integer
 func synchsafe(data []byte) int {
 	return int(data[0]&0x7F)<<21 | int(data[1]&0x7F)<<14 | int(data[2]&0x7F)<<7 | int(data[3]&0x7F)
 }
@@ -292,6 +294,7 @@ func (t *id3Tag) setText(id, value string) {
 	t.frames = append(t.frames, id3Frame{id: id, body: body})
 }
 
+// Drop every frame with this ID
 func (t *id3Tag) remove(id string) {
 	t.frames = slices.DeleteFunc(t.frames, func(frame id3Frame) bool { return frame.id == id })
 }
@@ -328,6 +331,7 @@ func (t *id3Tag) writeTo(destination io.Writer, padding int) (int, error) {
 	return written, nil
 }
 
+// Append a value as 28-bit synchsafe integer
 func appendSynchsafe(data []byte, value int) []byte {
 	return append(data, byte(value>>21)&0x7F, byte(value>>14)&0x7F, byte(value>>7)&0x7F, byte(value)&0x7F)
 }

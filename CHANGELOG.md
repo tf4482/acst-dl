@@ -2,6 +2,17 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-02
+
+### Added
+
+- Links-only mode ends with a summary line
+
+### Changed
+
+- CLI frame follows the shared house style: help with `--help`, `-h`, or `help` anywhere in the command line
+- Runs in pipes, logs, and services print a one-line banner, no progress bar, and skip feed summaries without changes
+
 ## [0.2.0] - 2026-10-22
 
 ### Added

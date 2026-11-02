@@ -66,9 +66,19 @@ vendor/
 venv/
 wheels/
 
+.claude/
+.codex/
+.agents/
+.gemini/
+.config/
+.cursor/
+.copilot/
+.agents/
+
 .env
 .env.*
 !.env.example
+*secrets*
 
 config.yml
 config.yaml
@@ -98,12 +108,10 @@ pip-log.txt
 yarn-debug.log*
 yarn-error.log*
 
-.box_pc
 .dypy.json
 .fleet
 .history
 .lck
-.led_pc
 .notes*
 .old
 .phpunit.cache
@@ -120,5 +128,11 @@ deploy*
 python-project-reviser.sh
 
 .prettierignore
-AGENTS.md
+AGENTS*
 build.spec
+CLAUDE*
+*.timer
+*.service
+!*.example.*
+AGENTS.*
+acme.json
