@@ -136,6 +136,7 @@ func (r *reader) directory(values map[string]any, key, location string) string {
 	return filepath.Clean(path)
 }
 
+// Strict boolean
 func (r *reader) flag(values map[string]any, key, location string) bool {
 	value, ok := values[key].(bool)
 	if !ok {

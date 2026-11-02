@@ -37,6 +37,7 @@ settings:
   download_timeout_seconds: 900
 `
 
+// Validate a configuration text
 func parseYAML(t *testing.T, text string) (Config, error) {
 	t.Helper()
 	var document any
@@ -46,6 +47,7 @@ func parseYAML(t *testing.T, text string) (Config, error) {
 	return parseConfig(document)
 }
 
+// File with parent folders, user-only
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -81,6 +83,7 @@ func tagBytes(tag id3Tag, padding int) []byte {
 	return data.Bytes()
 }
 
+// Episode files named by this tool
 func audioFiles(t *testing.T, directory string) []string {
 	t.Helper()
 	files, err := filepath.Glob(filepath.Join(directory, "*"+audioSuffix))
@@ -90,6 +93,7 @@ func audioFiles(t *testing.T, directory string) []string {
 	return slices.DeleteFunc(files, func(file string) bool { return !ownFile.MatchString(filepath.Base(file)) })
 }
 
+// Configuration beside the binary wins
 func TestExecutableConfigTakesPrecedence(t *testing.T) {
 	binaryDir, home := t.TempDir(), t.TempDir()
 	writeFile(t, filepath.Join(binaryDir, "config.yml"), validConfig)
@@ -107,6 +111,7 @@ func TestExecutableConfigTakesPrecedence(t *testing.T) {
 	}
 }
 
+// Broken selected file: no fallback, no content in the error
 func TestInvalidConfigDoesNotFallBackOrLeak(t *testing.T) {
 	binaryDir, home := t.TempDir(), t.TempDir()
 	writeFile(t, filepath.Join(binaryDir, "config.yml"), "feeds: [secret-content\n")
@@ -121,6 +126,7 @@ func TestInvalidConfigDoesNotFallBackOrLeak(t *testing.T) {
 	}
 }
 
+// First run writes a 0600 template that stays rejected until edited
 func TestFirstRunCreatesTemplate(t *testing.T) {
 	binaryDir, home := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
@@ -148,6 +154,7 @@ func TestFirstRunCreatesTemplate(t *testing.T) {
 	}
 }
 
+// Invalid values rejected
 func TestConfigValidation(t *testing.T) {
 	t.Setenv("HOME", "/home/listener")
 	config, err := parseYAML(t, strings.Replace(validConfig, `"/srv/podcasts"`, `"~/Podcasts"`, 1))
@@ -179,6 +186,7 @@ func TestConfigValidation(t *testing.T) {
 	}
 }
 
+// MP3 links from tags and plain text, deduplicated in page order
 func TestExtractLinks(t *testing.T) {
 	base, _ := url.Parse("https://feeds.example/show/feed.xml")
 	content := `<rss><item>
@@ -200,6 +208,7 @@ func TestExtractLinks(t *testing.T) {
 	}
 }
 
+// Mirrors dropped, limit applied, oldest first
 func TestPickLinksDropsMirrorsAndReverses(t *testing.T) {
 	links := []string{"new", "mirror", "unknown", "old", "older"}
 	signatures := []string{"a", "a", "", "b", "c"}
@@ -211,6 +220,7 @@ func TestPickLinksDropsMirrorsAndReverses(t *testing.T) {
 	}
 }
 
+// Mirror detection and stable episode names
 func TestContentSignature(t *testing.T) {
 	first := contentSignature("https://a.example/media/0123456789abcdef0123/ep.mp3", 5_000_000, "", "", "audio/mpeg")
 	mirror := contentSignature("https://b.example/audio/0123456789abcdef0123/ep.mp3?x=1", 5_000_000, "", "", "audio/mpeg")
@@ -240,6 +250,7 @@ func TestContentSignature(t *testing.T) {
 	}
 }
 
+// Tags written while streaming
 func TestCopyTaggedRewritesLeadingTag(t *testing.T) {
 	audio := []byte("\xFF\xFBaudio-frames")
 	release := time.Date(2026, 10, 5, 6, 30, 0, 0, time.Local)
@@ -276,6 +287,7 @@ func TestCopyTaggedRewritesLeadingTag(t *testing.T) {
 	}
 }
 
+// Tags with large chapter images still tagged
 func TestLargeTagIsRewritten(t *testing.T) {
 	// Chapter images can push a tag past tens of megabytes
 	big := id3Tag{version: 4}
@@ -292,6 +304,7 @@ func TestLargeTagIsRewritten(t *testing.T) {
 	}
 }
 
+// Non-synchsafe version 4 frame sizes accepted
 func TestParseTagWithPlainFrameSizes(t *testing.T) {
 	// Version 4 tag whose 200-byte frame size is not synchsafe
 	body := append([]byte{'T', 'I', 'T', '2', 0, 0, 0, 200, 0, 0, 3}, bytes.Repeat([]byte("x"), 199)...)
@@ -303,6 +316,7 @@ func TestParseTagWithPlainFrameSizes(t *testing.T) {
 	}
 }
 
+// Present files updated in place or rewritten
 func TestRetagFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "episode.mp3")
 	audio := []byte("\xFF\xFBaudio-frames")
@@ -373,6 +387,7 @@ func podcastServer(t *testing.T, downloads *atomic.Int32) *httptest.Server {
 	return server
 }
 
+// Valid configuration for one test feed
 func testConfig(directory, feed string) Config {
 	return Config{
 		Feeds:     []Feed{{"News", feed}},
@@ -386,6 +401,7 @@ func testConfig(directory, feed string) Config {
 	}
 }
 
+// Full run downloads once and removes stale files
 func TestRunDownloadsOnceAndTidies(t *testing.T) {
 	var downloads atomic.Int32
 	server := podcastServer(t, &downloads)
@@ -397,7 +413,7 @@ func TestRunDownloadsOnceAndTidies(t *testing.T) {
 	writeFile(t, filepath.Join(feedDir, "crashed.mp3.part"), "partial")
 
 	var output bytes.Buffer
-	if code := execute(context.Background(), printer{out: &output}, config); code != 0 {
+	if code := execute(context.Background(), printer{out: &output}, config, nil); code != 0 {
 		t.Fatalf("exit %d: %s", code, output.String())
 	}
 	files := audioFiles(t, feedDir)
@@ -417,7 +433,7 @@ func TestRunDownloadsOnceAndTidies(t *testing.T) {
 	}
 
 	// Second run finds everything present
-	if code := execute(context.Background(), printer{out: &output}, config); code != 0 || downloads.Load() != 2 {
+	if code := execute(context.Background(), printer{out: &output}, config, nil); code != 0 || downloads.Load() != 2 {
 		t.Fatalf("second run: exit %d, %d downloads\n%s", code, downloads.Load(), output.String())
 	}
 	if again := audioFiles(t, feedDir); !slices.Equal(again, files) {
@@ -425,13 +441,14 @@ func TestRunDownloadsOnceAndTidies(t *testing.T) {
 	}
 }
 
+// Links-only mode writes links.txt without downloads
 func TestLinksOnlyMode(t *testing.T) {
 	var downloads atomic.Int32
 	server := podcastServer(t, &downloads)
 	config := testConfig(t.TempDir(), server.URL+"/feed.xml")
 	config.Settings.DownloadFiles = false
 
-	if code := execute(context.Background(), printer{out: &bytes.Buffer{}}, config); code != 0 || downloads.Load() != 0 {
+	if code := execute(context.Background(), printer{out: &bytes.Buffer{}}, config, nil); code != 0 || downloads.Load() != 0 {
 		t.Fatalf("exit %d, %d downloads", code, downloads.Load())
 	}
 	links, err := os.ReadFile(filepath.Join(config.Directory, "News", linksFile))
@@ -440,6 +457,7 @@ func TestLinksOnlyMode(t *testing.T) {
 	}
 }
 
+// Failed feeds and downloads remove nothing and respect deadlines
 func TestFailuresKeepTheLibraryClean(t *testing.T) {
 	var downloads atomic.Int32
 	server := podcastServer(t, &downloads)
@@ -451,7 +469,7 @@ func TestFailuresKeepTheLibraryClean(t *testing.T) {
 
 	var output bytes.Buffer
 	started := time.Now()
-	code := execute(context.Background(), printer{out: &output}, config)
+	code := execute(context.Background(), printer{out: &output}, config, nil)
 	if time.Since(started) > 3*time.Second {
 		t.Fatalf("deadline ignored: %v", time.Since(started))
 	}
@@ -465,6 +483,7 @@ func TestFailuresKeepTheLibraryClean(t *testing.T) {
 	}
 }
 
+// Release dates name, tag, and stamp the files
 func TestReleaseDatesOrderTheLibrary(t *testing.T) {
 	var downloads atomic.Int32
 	server := podcastServer(t, &downloads)
@@ -476,7 +495,7 @@ func TestReleaseDatesOrderTheLibrary(t *testing.T) {
 	writeFile(t, filepath.Join(feedDir, "2026-10-22-120000000000_ep1_"+hash+audioSuffix), "\xFF\xFBold")
 
 	var output bytes.Buffer
-	if code := execute(context.Background(), printer{out: &output}, config); code != 0 || downloads.Load() != 1 {
+	if code := execute(context.Background(), printer{out: &output}, config, nil); code != 0 || downloads.Load() != 1 {
 		t.Fatalf("exit %d, %d downloads: %s", code, downloads.Load(), output.String())
 	}
 	files := audioFiles(t, feedDir)
