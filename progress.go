@@ -20,7 +20,7 @@ const (
 	progressFrames   = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 )
 
-// Live progress line; silent when output is not a terminal
+// Live progress line on an interactive terminal; silent otherwise
 type progress struct {
 	out     printer
 	label   string
@@ -37,8 +37,9 @@ type progress struct {
 // Start a bar for a phase of total steps; always pair with done
 func (p printer) progress(label string, total int) *progress {
 	bar := &progress{out: p, label: label, total: total, width: 80}
+	// Logs, pipes, and services stay free of progress noise
 	file, ok := p.out.(*os.File)
-	if !ok || !term.IsTerminal(int(file.Fd())) {
+	if !ok || !p.interactive {
 		return bar
 	}
 	if width, _, err := term.GetSize(int(file.Fd())); err == nil && width > 0 {
@@ -135,24 +136,9 @@ func (b *progress) draw() {
 	text := prefix + active + inactive + suffix
 	if b.out.color {
 		text = "\033[" + cyan + "m" + spinner + "\033[0m" + prefix[len(spinner):] +
-			progressTint(current, b.total) + active + "\033[0m" +
+			tint(current, b.total) + active + "\033[0m" +
 			"\033[2m" + inactive + "\033[0m" +
-			"  " + progressTint(current, b.total) + fmt.Sprintf("%3d%%", percent) + "\033[0m · " + count + message
+			"  " + tint(current, b.total) + fmt.Sprintf("%3d%%", percent) + "\033[0m · " + count + message
 	}
 	fmt.Fprint(b.out.out, "\r\033[K"+text)
-}
-
-// Blend the progress tint from pink through gold to turquoise
-func progressTint(current, total int) string {
-	percent := 100 * max(0, min(current, total)) / max(total, 1)
-	from, to := [3]int{255, 45, 145}, [3]int{255, 190, 65}
-	if percent > 50 {
-		percent -= 50
-		from, to = to, [3]int{45, 220, 195}
-	}
-	mix := min(percent*2, 100)
-	return fmt.Sprintf("\033[38;2;%d;%d;%dm",
-		from[0]+(to[0]-from[0])*mix/100,
-		from[1]+(to[1]-from[1])*mix/100,
-		from[2]+(to[2]-from[2])*mix/100)
 }

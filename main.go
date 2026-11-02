@@ -62,12 +62,23 @@ type download struct {
 	episode *Episode
 }
 
+// Entry point; the frame returns the exit code
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
+// Known options; none
+func options() map[string]bool {
+	return nil
+}
+
+// Subcommands besides the default run; none
+func commands() map[string]command {
+	return nil
+}
+
 // Scan, select, download, tidy, report
-func execute(ctx context.Context, out printer, config Config) int {
+func execute(ctx context.Context, out printer, config Config, options map[string]string) int {
 	started := time.Now()
 	settings := config.Settings
 	client := newClient(settings.VerifyTLS)
@@ -102,7 +113,7 @@ func execute(ctx context.Context, out printer, config Config) int {
 		}
 		// Feeds with nothing to fetch report right away
 		if run.Pending = len(queues[index]); run.Pending == 0 {
-			sum.add(finishFeed(out.line, run, settings, started))
+			sum.add(finishFeed(out.line, out.interactive, run, settings, started))
 		}
 	}
 	downloads := interleave(queues)
@@ -136,7 +147,7 @@ func execute(ctx context.Context, out printer, config Config) int {
 			return
 		}
 		// File work runs unlocked so other downloads keep going
-		feed := finishFeed(bar.line, run, settings, started)
+		feed := finishFeed(bar.line, out.interactive, run, settings, started)
 		mutex.Lock()
 		sum.add(feed)
 		mutex.Unlock()
@@ -224,7 +235,7 @@ func episodeLine(name string, episode *Episode) (icon, text, color string) {
 }
 
 // Retag present files, remove stale ones, and print the feed summary
-func finishFeed(say func(icon, text, color string), run *FeedRun, settings Settings, started time.Time) (sum totals) {
+func finishFeed(say func(icon, text, color string), interactive bool, run *FeedRun, settings Settings, started time.Time) (sum totals) {
 	name := run.Feed.Name
 	if run.Reason != "" {
 		say("❌", fmt.Sprintf("%s · feed · %s", name, run.Reason), red)
@@ -269,6 +280,10 @@ func finishFeed(say func(icon, text, color string), run *FeedRun, settings Setti
 	sum.removed = removed
 	sum.bytes = size
 
+	// Logs only show feeds that changed or failed
+	if !interactive && downloaded == 0 && removed == 0 && failed == 0 {
+		return sum
+	}
 	icon, color := "🎙️", boldGreen
 	if failed > 0 {
 		sum.failed = true
@@ -291,7 +306,7 @@ func finishFeed(say func(icon, text, color string), run *FeedRun, settings Setti
 
 // Links-only mode: one links.txt per feed
 func listLinks(out printer, runs []FeedRun) int {
-	code := 0
+	code, written := 0, 0
 	for index := range runs {
 		run := &runs[index]
 		if run.Reason == "" && len(run.Links) > 0 {
@@ -306,13 +321,25 @@ func listLinks(out printer, runs []FeedRun) int {
 		case len(run.Links) == 0:
 			out.line("⚠️", run.Feed.Name+" · no MP3 links found", yellow)
 		default:
-			out.line("✅", fmt.Sprintf("%s · %d of %s · %s", run.Feed.Name, len(run.Links),
-				plural(run.Found, "link"), linksFile), green)
+			written += len(run.Links)
+			// Logs skip routine per-feed lines
+			if out.interactive {
+				out.line("✅", fmt.Sprintf("%s · %d of %s · %s", run.Feed.Name, len(run.Links),
+					plural(run.Found, "link"), linksFile), green)
+			}
 		}
 	}
+
+	icon, color, verdict := "✅", green, "Done"
+	if code != 0 {
+		icon, color, verdict = "⚠️", yellow, "Done with errors"
+	}
+	out.line(icon, fmt.Sprintf("%s · %s · %s saved to %s", verdict, plural(len(runs), "feed"),
+		plural(written, "link"), linksFile), color)
 	return code
 }
 
+// Count with a regular English plural
 func plural(count int, noun string) string {
 	if count == 1 {
 		return "1 " + noun
@@ -326,6 +353,7 @@ func pace(size int64, took time.Duration) string {
 		megabytes(int64(float64(size)/max(took.Seconds(), 0.001))))
 }
 
+// Size in mebibytes with one decimal
 func megabytes(size int64) string {
 	return fmt.Sprintf("%.1f MB", float64(size)/(1<<20))
 }

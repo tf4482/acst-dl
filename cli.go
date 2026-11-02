@@ -1,5 +1,5 @@
-// Shared CLI frame: help, colored output, signals, exit codes.
-// Copy unchanged; the app supplies projectName, help, and execute.
+// Shared CLI frame: help, options, subcommands, colored output, signals, exit codes.
+// Copy unchanged; the app supplies projectName, help, options, commands, and execute.
 package main
 
 import (
@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -25,12 +26,17 @@ const (
 
 // Colored line output
 type printer struct {
-	out   io.Writer
-	color bool
+	out         io.Writer
+	color       bool
+	interactive bool
 }
 
-// Framed startup banner
+// Framed startup banner; a single line outside an interactive terminal
 func (p printer) header() {
+	if !p.interactive {
+		p.line("🚀", projectName+" — starting", "")
+		return
+	}
 	// Rocket is two cells wide everywhere, unlike the gear
 	title := "  🚀  " + projectName + " — starting  "
 	border := strings.Repeat("─", utf8.RuneCountInString(title)+1)
@@ -57,27 +63,67 @@ func (p printer) print(text, color string) {
 	fmt.Fprintln(p.out, text)
 }
 
+// Shared color of menu frames and progress bars: position of last, blended from pink through gold to turquoise
+func tint(position, last int) string {
+	percent := 100 * max(0, min(position, last)) / max(last, 1)
+	from, to := [3]int{255, 45, 145}, [3]int{255, 190, 65}
+	if percent > 50 {
+		percent -= 50
+		from, to = to, [3]int{45, 220, 195}
+	}
+	mix := min(percent*2, 100)
+	return fmt.Sprintf("\033[38;2;%d;%d;%dm",
+		from[0]+(to[0]-from[0])*mix/100,
+		from[1]+(to[1]-from[1])*mix/100,
+		from[2]+(to[2]-from[2])*mix/100)
+}
+
+// Parsed command line: option values by name ("" for flags), then positional arguments
+type commandLine struct {
+	options     map[string]string
+	positionals []string
+}
+
+// Subcommand work after banner and configuration; gets the options and the arguments after its name
+type command func(ctx context.Context, out printer, config Config, arguments commandLine) int
+
 // Help, argument check, colors, signals, exit code
 func run(arguments []string) int {
-	if len(arguments) == 1 && (arguments[0] == "-h" || arguments[0] == "--help" || arguments[0] == "help") {
+	if (len(arguments) > 0 && arguments[0] == "help") || slices.Contains(arguments, "-h") || slices.Contains(arguments, "--help") {
 		fmt.Print(help)
 		return 0
 	}
-	if len(arguments) > 0 {
-		fmt.Fprintf(os.Stderr, "❌ Unknown argument: %s\n", arguments[0])
-		fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n", projectName)
-		return 1
+	// Options are checked before the banner
+	parsed, problem := parseCommandLine(arguments, options())
+	if problem != "" {
+		return usageFailure(problem)
+	}
+	// Default run takes options only; a positional names a subcommand
+	work := func(ctx context.Context, out printer, config Config) int {
+		return execute(ctx, out, config, parsed.options)
+	}
+	if len(parsed.positionals) > 0 {
+		handler, ok := commands()[parsed.positionals[0]]
+		if !ok {
+			return usageError(parsed.positionals[0])
+		}
+		work = func(ctx context.Context, out printer, config Config) int {
+			return handler(ctx, out, config, commandLine{parsed.options, parsed.positionals[1:]})
+		}
 	}
 
+	// Logs, pipes, and services get quiet output without redraws
 	_, noColor := os.LookupEnv("NO_COLOR")
-	out := printer{os.Stdout, term.IsTerminal(int(os.Stdout.Fd())) && !noColor}
+	terminal := term.IsTerminal(int(os.Stdout.Fd()))
+	interactive := terminal && term.IsTerminal(int(os.Stdin.Fd())) && os.Getenv("TERM") != "dumb"
+	out := printer{os.Stdout, terminal && !noColor, interactive}
 
 	// First Ctrl-C cancels cleanly, second one kills
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	context.AfterFunc(ctx, stop)
 
-	code := start(ctx, out)
+	code := start(ctx, out, work)
 	if ctx.Err() != nil {
 		out.line("🛑", "Interrupted", yellow)
 		return 130
@@ -85,8 +131,55 @@ func run(arguments []string) int {
 	return code
 }
 
-// Banner and configuration, then the app's own work
-func start(ctx context.Context, out printer) int {
+// Split options from positional arguments; known maps each option to whether it takes a value.
+// Returns the usage problem, empty on success.
+func parseCommandLine(arguments []string, known map[string]bool) (commandLine, string) {
+	parsed := commandLine{options: map[string]string{}}
+	for index := 0; index < len(arguments); index++ {
+		argument := arguments[index]
+		// Everything after -- is positional
+		if argument == "--" {
+			parsed.positionals = append(parsed.positionals, arguments[index+1:]...)
+			break
+		}
+		if !strings.HasPrefix(argument, "-") || argument == "-" {
+			parsed.positionals = append(parsed.positionals, argument)
+			continue
+		}
+		// --name, --name value, or --name=value; the last one wins
+		name, value, hasValue := strings.Cut(argument, "=")
+		takesValue, ok := known[name]
+		switch {
+		case !ok:
+			return commandLine{}, "Unknown argument: " + argument
+		case !takesValue && hasValue:
+			return commandLine{}, "Option takes no value: " + name
+		case takesValue && !hasValue:
+			if index+1 == len(arguments) {
+				return commandLine{}, "Missing value for " + name
+			}
+			index++
+			value = arguments[index]
+		}
+		parsed.options[name] = value
+	}
+	return parsed, ""
+}
+
+// Usage problem on stderr; returns the failure exit code
+func usageFailure(problem string) int {
+	fmt.Fprintf(os.Stderr, "❌ %s\n", problem)
+	fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n", projectName)
+	return 1
+}
+
+// Unknown argument on stderr; returns the failure exit code
+func usageError(argument string) int {
+	return usageFailure("Unknown argument: " + argument)
+}
+
+// Banner and configuration, then the default run or the named subcommand
+func start(ctx context.Context, out printer, work func(context.Context, printer, Config) int) int {
 	out.header()
 	binaryDir, err := executableDir()
 	if err != nil {
@@ -106,5 +199,5 @@ func start(ctx context.Context, out printer) int {
 	if err != nil {
 		return out.fail("Configuration", err)
 	}
-	return execute(ctx, out, config)
+	return work(ctx, out, config)
 }
